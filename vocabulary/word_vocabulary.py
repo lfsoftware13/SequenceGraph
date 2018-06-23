@@ -9,12 +9,14 @@ class Vocabulary(object):
                  end_tokens,
                  unk_token,
                  pad_token=None,
+                 hole_token=None,
                  addition_tokens=None,
                  add_position_to_dict=True):
         self.unk = unk_token
         self.pad = pad_token
         self.begin_tokens = begin_tokens
         self.end_tokens = end_tokens
+        self.hole_token = hole_token
         self.addition_tokens = addition_tokens if addition_tokens is not None else []
         if add_position_to_dict:
             position_tokens = set(begin_tokens)
@@ -25,7 +27,10 @@ class Vocabulary(object):
             position_tokens |= set(self.addition_tokens)
             self.word_set = word_set | position_tokens
             for token in sorted(position_tokens):
-                word_to_id_dict[token] = len(word_to_id_dict)
+                if token not in word_to_id_dict.keys():
+                    word_to_id_dict[token] = len(word_to_id_dict)
+            if hole_token is not None:
+                word_to_id_dict[hole_token] = len(word_to_id_dict)
         self.word_to_id_dict = word_to_id_dict
         self.id_to_word_dict = util.reverse_dict(self.word_to_id_dict)
 
@@ -64,5 +69,5 @@ class Vocabulary(object):
         return len(self.id_to_word_dict)
 
 
-def load_vocabulary(load_vocabulary_fn, load_vocabulary_id_dict, begin_tokens ,end_tokens, unk_token, pad_token, addition_tokens) -> Vocabulary:
-    return Vocabulary(load_vocabulary_fn(), load_vocabulary_id_dict(), begin_tokens, end_tokens, unk_token, pad_token, addition_tokens)
+def load_vocabulary(load_vocabulary_fn, load_vocabulary_id_dict, begin_tokens ,end_tokens, unk_token, pad_token, hole_token, addition_tokens) -> Vocabulary:
+    return Vocabulary(load_vocabulary_fn(), load_vocabulary_id_dict(), begin_tokens, end_tokens, unk_token, pad_token, hole_token, addition_tokens)

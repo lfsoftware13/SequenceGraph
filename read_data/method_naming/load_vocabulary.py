@@ -32,8 +32,8 @@ def get_summarization_java_code_vocabulary_id_map():
 
 
 @disk_cache(basename='create_summarization_java_code_vocabulary', directory=CACHE_DATA_PATH)
-def create_summarization_java_code_vocabulary(begin_tokens, end_tokens, unk_token, pad_token, addition_tokens=None):
-    vocab = load_vocabulary(get_summarization_java_code_vocabulary_set, get_summarization_java_code_vocabulary_id_map, begin_tokens=begin_tokens, end_tokens=end_tokens, unk_token=unk_token, pad_token=pad_token, addition_tokens=addition_tokens)
+def create_summarization_java_code_vocabulary(begin_tokens, end_tokens, unk_token, pad_token, hole_token, addition_tokens=None):
+    vocab = load_vocabulary(get_summarization_java_code_vocabulary_set, get_summarization_java_code_vocabulary_id_map, begin_tokens=begin_tokens, end_tokens=end_tokens, unk_token=unk_token, pad_token=pad_token, hole_token=hole_token, addition_tokens=addition_tokens)
     return vocab
 
 
@@ -51,7 +51,7 @@ def get_summarization_method_name_vocabulary_id_map():
 
 @disk_cache(basename='create_summarization_method_name_vocabulary', directory=CACHE_DATA_PATH)
 def create_summarization_method_name_vocabulary(begin_tokens, end_tokens, unk_token, pad_token, addition_tokens=None):
-    vocab = load_vocabulary(get_summarization_method_name_vocabulary_set, get_summarization_method_name_vocabulary_id_map, begin_tokens=begin_tokens, end_tokens=end_tokens, unk_token=unk_token, pad_token=pad_token, addition_tokens=addition_tokens)
+    vocab = load_vocabulary(get_summarization_method_name_vocabulary_set, get_summarization_method_name_vocabulary_id_map, begin_tokens=begin_tokens, end_tokens=end_tokens, unk_token=unk_token, pad_token=pad_token, hole_token=None, addition_tokens=addition_tokens)
     return vocab
 
 
@@ -61,7 +61,8 @@ def load_summarization_java_code_vocabulary():
     end = '<SENTENCE_END/>'
     unk = '<SENTENCE_UNK>'
     pad_name = '<SENTENCE_PAD>'
-    vocab = create_summarization_java_code_vocabulary([begin], [end], unk, pad_name, addition_tokens=None)
+    hole = '<SENTENCE_HOLE>'
+    vocab = create_summarization_java_code_vocabulary([begin], [end], unk, pad_name, hole, addition_tokens=None)
     return vocab
 
 
@@ -71,5 +72,15 @@ def load_summarization_method_name_vocabulary():
     end_name = '<METHOD_END>'
     unk = '<METHOD_UNK>'
     pad_name = '<METHOD_PAD>'
+
     vocab = create_summarization_method_name_vocabulary([begin_name], [end_name], unk, pad_name, addition_tokens=None)
     return vocab
+
+
+if __name__ == '__main__':
+    method_name_vocab = load_summarization_java_code_vocabulary()
+    print(method_name_vocab.word_to_id('<SENTENCE_HOLE>'))
+    print(method_name_vocab.vocabulary_size)
+    print(method_name_vocab.word_to_id('<SENTENCE_START>'))
+    print(method_name_vocab.word_to_id(method_name_vocab.end_tokens[0]))
+    print(method_name_vocab.word_to_id(method_name_vocab.pad))

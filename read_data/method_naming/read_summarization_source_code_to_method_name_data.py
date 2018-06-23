@@ -132,6 +132,7 @@ if __name__ == '__main__':
     json_path = r'G:\Project\dataset\json\gradle_test_methodnaming.json'
     # df = read_summarization_json_file(json_path)
     train, valid = read_summarization_train_data_with_valid()
+    print(train['tokens'].iloc[0])
 
 
 
