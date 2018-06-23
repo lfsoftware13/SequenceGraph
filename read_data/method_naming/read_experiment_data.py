@@ -1,10 +1,7 @@
 from common.constants import CACHE_DATA_PATH
 from common.util import disk_cache
-from read_data.load_vocabulary import load_summarization_java_code_vocabulary, load_summarization_method_name_vocabulary
-from read_data.read_summarization_source_code_to_method_name_data import read_summarization_train_data, \
-    read_summarization_test_data_list, read_summarization_test_data, read_summarization_train_data_with_valid
-
-import pandas as pd
+from read_data.method_naming.load_vocabulary import load_summarization_java_code_vocabulary, load_summarization_method_name_vocabulary
+from read_data.method_naming.read_summarization_source_code_to_method_name_data import read_summarization_test_data, read_summarization_train_data_with_valid
 
 
 @disk_cache(basename='read_summarization_data_with_id', directory=CACHE_DATA_PATH)

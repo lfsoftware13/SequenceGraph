@@ -2,7 +2,7 @@ import more_itertools
 
 from common.constants import CACHE_DATA_PATH
 from common.util import disk_cache
-from read_data.read_summarization_source_code_to_method_name_data import read_summarization_train_data, \
+from read_data.method_naming.read_summarization_source_code_to_method_name_data import \
     read_summarization_train_data_with_valid
 from vocabulary.word_vocabulary import load_vocabulary
 
