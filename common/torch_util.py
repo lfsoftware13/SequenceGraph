@@ -271,5 +271,87 @@ def create_sequence_length_mask(token_length, max_len, gpu_index=None):
     return mask
 
 
+def calculate_rank_sequence(log_probs, target, ignore_token=None, rank=1, gpu_index=None):
+    """
+
+    :param log_probs:
+    :param target:
+    :param ignore_token:
+    :param rank:
+    :param gpu_index:
+    :return:
+    """
+    if isinstance(target, list):
+        target = torch.LongTensor(target)
+        if gpu_index is not None:
+            target = target.cuda(gpu_index)
+    if isinstance(log_probs, PackedSequence):
+        log_probs = log_probs.data
+    if isinstance(target, PackedSequence):
+        target = target.data
+
+    batch_size = log_probs.shape[0]
+    seq_size = log_probs.shape[1]
+    vocab_size = log_probs.shape[-1]
+
+    select_stack = []
+    current_probs = torch.zeros(batch_size)
+    if gpu_index is not None:
+        current_probs = current_probs.cuda(gpu_index)
+    batch_probs = log_probs
+
+    for i in range(seq_size):
+        cur_probs = batch_probs[:, i, :]
+        # [batch, 1, rank]
+        cur_topk_probs, cur_topk_ids = torch.topk(cur_probs, k=rank, dim=-1)[1]
+        cur_probs.view(-1, 1).expand(-1, rank).view(-1)
+
+
+
+
+
+
+def calculate_f1_score(log_probs, target, ignore_token=None, topk_range=(1, 15), gpu_index=None):
+    """
+    compare the log probility of all possible token with target token. calculate the accuracy of the code.
+    ensure dim[1] of log_probs(seq len) is the same as dim[1] of target.
+    :param log_probs: [batch, seq_len, vocab_size]
+    :param target:
+    :param ignore_token:
+    :param save_name:
+    :param topk_range: (min_k, max_k)
+    :return:
+    """
+    if isinstance(target, list):
+        target = torch.LongTensor(target)
+        if gpu_index is not None:
+            target = target.cuda(gpu_index)
+    if isinstance(log_probs, PackedSequence):
+        log_probs = log_probs.data
+    if isinstance(target, PackedSequence):
+        target = target.data
+
+    batch_size = log_probs.shape[0]
+    vocab_size = log_probs.shape[-1]
+
+    log_probs = log_probs.view(-1, vocab_size)
+    target = target.view(-1)
+
+    if log_probs.shape[0] != target.shape[0]:
+        print('different shape between log_probs and target. log_probs: {}, target: {}'.format(log_probs.shape, target.shape))
+        raise Exception('different shape between log_probs and target. log_probs: {}, target: {}'.format(log_probs.shape, target.shape))
+
+    max_topk = max(*topk_range)
+    min_topk = min(*topk_range)
+    if min_topk < 1:
+        min_topk = 1
+    if max_topk < 1:
+        max_topk = 1
+
+    # top_k_ids_size = [batch_size, seq_len, max_topk]
+    top_k_ids = torch.topk(log_probs, dim=1, k=max_topk)[1]
+
+
+
 if __name__ == '__main__':
     a = []
