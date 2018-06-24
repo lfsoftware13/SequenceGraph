@@ -1,7 +1,10 @@
 from common.constants import CACHE_DATA_PATH
-from common.util import disk_cache
+from common.util import disk_cache, PaddedList
+from read_data.data_set import OriDataSet
 from read_data.method_naming.load_vocabulary import load_summarization_java_code_vocabulary, load_summarization_method_name_vocabulary
 from read_data.method_naming.read_summarization_source_code_to_method_name_data import read_summarization_test_data, read_summarization_train_data_with_valid
+
+import pandas as pd
 
 
 @disk_cache(basename='read_summarization_data_with_id', directory=CACHE_DATA_PATH)
@@ -112,11 +115,50 @@ def transform_token_to_subtoken_list(df):
     print(len(df))
     return df
 
+
 def filter_output_long(df, max_len=10):
     length = df['name'].map(len)
     select = length < max_len
     df = df[select]
     return df
+
+
+@disk_cache(basename='load_method_naming_data', directory=CACHE_DATA_PATH)
+def load_method_naming_data(decoder_max_length, is_debug=False, ):
+    from read_data.method_naming.load_vocabulary import load_summarization_java_code_vocabulary, \
+        load_summarization_method_name_vocabulary
+    code_vocabulary = load_summarization_java_code_vocabulary()
+    method_name_vocabulary = load_summarization_method_name_vocabulary()
+    embedding_size = code_vocabulary.vocabulary_size
+    pad_id = code_vocabulary.word_to_id(code_vocabulary.pad)
+    unk_id = code_vocabulary.word_to_id(code_vocabulary.unk)
+    begin_id = code_vocabulary.word_to_id(code_vocabulary.begin_tokens[0])
+    hole_id = code_vocabulary.word_to_id(code_vocabulary.hole_token)
+    output_pad_id = method_name_vocabulary.word_to_id(method_name_vocabulary.pad)
+    output_size = method_name_vocabulary.vocabulary_size
+
+    def parse_data(df: pd.DataFrame):
+        res = []
+        for row in df.iterrows():
+            row = row[1]
+            res.append(
+                {
+                    "text": row['tokens'],
+                    "input": row['subtokens_id'],
+                    "label": PaddedList(row['names_id'],
+                                        fill_value=output_pad_id,
+                                        shape=[decoder_max_length, ]),
+                    "length": len(row['subtokens_id']),
+                    "max_decoder_length": decoder_max_length,
+                }
+            )
+        return res
+
+    train, valid, test = [OriDataSet(parse_data(t))
+                          for t in
+                          read_summarization_data_with_subtokens_list_with_debug(is_debug)]
+
+    return train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id
 
 
 if __name__ == '__main__':
