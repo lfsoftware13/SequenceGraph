@@ -9,6 +9,7 @@ import types
 from multiprocessing import Pool
 import typing
 import hashlib
+import numpy as np
 
 import copy
 from typing import Iterator
@@ -908,3 +909,10 @@ def iterate_directory(root_path, extensions=None, recursive=False):
                         or ((isinstance(extensions, list) or isinstance(extensions, tuple)) and extension_name in extensions) \
                         or (isinstance(extensions, str) and extensions == extension_name):
                     yield os.path.join(dir_path, file), file
+
+
+def create_sequence_node_link(begin_idx, length):
+    idx = np.arange(begin_idx, begin_idx + length - 1, dtype=np.float)
+    idy = idx + 1
+    self_id = np.arange(begin_idx, begin_idx + length, dtype=np.float)
+    return [idx, idy, self_id], [idy, idx, self_id]

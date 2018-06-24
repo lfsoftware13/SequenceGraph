@@ -4,6 +4,7 @@ import os
 from common import util
 
 root = r'/home/lf/Project/SequenceGraph'
+DATA_PATH = os.path.join(root, 'data')
 # tmp path
 temp_code_write_path = r'tmp'
 # scrapyOJ db path
