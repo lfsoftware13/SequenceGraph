@@ -64,6 +64,12 @@ class SequenceExactMatch(Evaluator):
     def get_top1_result(self):
         return self.match_count / self.batch_count
 
+    def __str__(self):
+        return ' SequenceExactMatch top 1: ' + str(self.match_count / self.batch_count)
+
+    def __repr__(self):
+        return self.__str__()
+
 
 if __name__ == "__main__":
     em_eval = SequenceExactMatch(ignore_token=-1, gpu_index=0)
