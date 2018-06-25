@@ -29,9 +29,6 @@ class EncoderDecoderModel(nn.Module):
                  dynamic_graph_n_layer,
                  graph_attention_n_head,
                  graph_itr,
-                 pad_idx,
-                 begin_idx,
-                 hole_idx,
                  leaky_alpha):
         super().__init__()
         self._graph_itr = graph_itr
@@ -47,11 +44,8 @@ class EncoderDecoderModel(nn.Module):
                                                                                   leaky_alpha,
                                                                                   graph_attention_n_head)
         self.output = nn.Linear(hidden_size*graph_attention_n_head, out_vocabulary_size)
-        self._pad_idx = pad_idx
-        self._begin_idx = begin_idx
-        self._hole_idx = hole_idx
 
-    def _forward(self, encoder_sequence, initial_decoder_sequence, fixed_graph, ):
+    def forward(self, encoder_sequence, initial_decoder_sequence, fixed_graph, ):
         output_begin_idx = encoder_sequence.shape[1]
         node_representation = self.input_embedding(torch.cat((encoder_sequence, initial_decoder_sequence), dim=1))
         del encoder_sequence, initial_decoder_sequence
@@ -62,6 +56,22 @@ class EncoderDecoderModel(nn.Module):
             node_representation = node_representation + self.graph_attention(node_representation, dynamic_graph)
         o = self.output(node_representation[:, output_begin_idx:, :])
         return o
+
+
+class PreprocessWrapper(nn.Module):
+    def __init__(self,
+                 m,
+                 pad_idx,
+                 hole_idx,
+                 begin_idx):
+        super().__init__()
+        self.m = m
+        self._pad_idx = pad_idx
+        self._hole_idx = hole_idx
+        self._begin_idx = begin_idx
+
+    def forward(self, batch_data):
+        return self.m(*self._preprocess(batch_data))
 
     def _preprocess(self, batch_data):
         from common.util import PaddedList
@@ -83,7 +93,7 @@ class EncoderDecoderModel(nn.Module):
         adj_matrix = []
         max_length = max(len(x) for x in intput_seq)
         size = max_length + max_decoder_length
-        print("size:{}".format(size))
+        # print("size:{}".format(size))
         for i in range(batch_size):
             length = len(intput_seq[i])
             idx, idy = create_sequence_node_link(0, length)
@@ -98,6 +108,3 @@ class EncoderDecoderModel(nn.Module):
 
         adj_matrix = to_cuda(torch.FloatTensor(np.stack(adj_matrix, axis=0)))
         return encoder_sequence, initial_decoder_sequence, adj_matrix
-
-    def forward(self, batch_data):
-        return self._forward(*self._preprocess(batch_data))

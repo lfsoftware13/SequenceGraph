@@ -4,7 +4,7 @@ from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
 from common.util import PaddedList
 from read_data.data_set import OriDataSet
-from model.encoder_decoder_graph import EncoderDecoderModel
+from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper
 
 import pandas as pd
 
@@ -28,7 +28,7 @@ def NCE_train_loss():
 def method_name_config1(is_debug):
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
-        load_method_naming_data(12, is_debug=is_debug)
+        load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
     return {
         "model_fn": EncoderDecoderModel,
         "model_dict": {
@@ -42,13 +42,16 @@ def method_name_config1(is_debug):
             "dynamic_graph_n_layer": 2,
             "graph_attention_n_head": 8,
             "graph_itr": 5,
+            "leaky_alpha": 0.2,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
             "pad_idx": pad_id,
             "begin_idx": begin_id,
             "hole_idx": hole_id,
-            "leaky_alpha": 0.2,
         },
         "data": [train, valid, test],
-        "batch_size": 4,
+        "batch_size": 6,
         "train_loss": NCE_train_loss,
         "clip_norm": None,
         "name": "sequence_graph_encoder_decoder_for_method_name",

@@ -129,7 +129,7 @@ def filter_output_long(df, max_len=10):
 
 
 @disk_cache(basename='load_method_naming_data', directory=CACHE_DATA_PATH)
-def load_method_naming_data(decoder_max_length, is_debug=False, ):
+def load_method_naming_data(decoder_max_length, is_debug=False, max_token_length=200):
     from read_data.method_naming.load_vocabulary import load_summarization_java_code_vocabulary, \
         load_summarization_method_name_vocabulary
     code_vocabulary = load_summarization_java_code_vocabulary()
@@ -161,7 +161,8 @@ def load_method_naming_data(decoder_max_length, is_debug=False, ):
 
     train, valid, test = [OriDataSet(parse_data(t))
                           for t in
-                          read_summarization_data_with_subtokens_list_with_debug(is_debug)]
+                          read_summarization_data_with_subtokens_list_with_debug(is_debug,
+                                                                                 max_token_length=max_token_length)]
 
     return train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id
 

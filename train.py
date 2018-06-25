@@ -21,7 +21,7 @@ from common.util import data_loader
 from read_data.data_set import OriDataSet
 
 
-def get_model(model_fn, parameter, path, load_previous=False,):
+def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_parameter, path, load_previous=False,):
     m = model_fn(
         **parameter
     )
@@ -32,6 +32,7 @@ def get_model(model_fn, parameter, path, load_previous=False,):
         print("create new model")
     # to_cuda(m)
     m = nn.DataParallel(m.cuda(), device_ids=[0, 1])
+    m = pre_process_module_fn(m, **pre_process_module_parameter)
     return m
 
 
@@ -101,12 +102,11 @@ def evaluate(model, valid_dataset, batch_size, evaluate_loss_function, train_los
     for batch_data in data_loader(valid_dataset, batch_size=batch_size, is_shuffle=False, drop_last=False):
         model.zero_grad()
         predict_logit = model.forward(batch_data)
-        train_loss = train_loss_function(predict_logit, to_cuda(torch.FloatTensor(batch_data['label'])))
+        target = to_cuda(torch.LongTensor(batch_data['label']))
+        train_loss = train_loss_function(predict_logit, target)
         train_total_loss += train_loss.data
         steps += 1
-        predict_ = F.sigmoid(predict_logit)
-        target = batch_data['label']
-        total_loss.append(evaluate_loss_function(predict_.data.cpu().tolist(), target))
+        total_loss.append(evaluate_loss_function(predict_logit, target))
     return np.mean(total_loss), train_total_loss/steps
 
 
@@ -130,10 +130,10 @@ def train_and_evaluate(
     if load_previous:
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_loss_function,
                                                 train_loss_function)
-        test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
-                                              train_loss_function)
+        # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
+        #                                       train_loss_function)
         best_valid_loss = valid_loss
-        best_test_loss = test_loss
+        # best_test_loss = test_loss
         print(("load the previous mode, validation loss is {}, train validation loss is:{}, " +
               "test loss is :{}, train_test_loss: {}").format(
                 best_valid_loss, train_valid_loss, best_test_loss, train_test_loss))
@@ -143,7 +143,7 @@ def train_and_evaluate(
             return
     else:
         best_valid_loss = None
-        best_test_loss = None
+        # best_test_loss = None
 
     begin_time = time.time()
     # with torch.autograd.profiler.profile() as prof:
@@ -151,27 +151,27 @@ def train_and_evaluate(
         train_loss = train(model, train_dataset, batch_size, train_loss_function, optimizer, clip_norm, epoch_ratio)
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_loss_function,
                                                 train_loss_function)
-        test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
-                                              train_loss_function)
+        # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
+        #                                       train_loss_function)
 
         train_loss = train_loss.item()
         train_valid_loss = train_valid_loss.item()
-        train_test_loss = train_test_loss.item()
+        # train_test_loss = train_test_loss.item()
 
         scheduler.step(valid_loss)
 
-        if best_valid_loss is None or valid_loss < best_valid_loss:
-            best_valid_loss = valid_loss
-            best_test_loss = test_loss
+        if best_valid_loss is None or train_valid_loss > best_valid_loss:
+            best_valid_loss = train_valid_loss
+            # best_test_loss = train_test_loss
             torch_util.save_model(model, save_path)
 
         print(
             ("epoch {}: train loss of {},  valid loss of {}, train validation loss is:{}" +
-             " , test loss of {}, train_test_loss: {}").
-            format(epoch, train_loss, valid_loss, train_valid_loss, test_loss, train_test_loss))
+             " ").
+            format(epoch, train_loss, valid_loss, train_valid_loss,))
     # print(prof)
-    print("The model {} best valid loss is {} and test loss is {}".
-          format(save_path, best_valid_loss, best_test_loss))
+    print("The model {} best valid loss is {}".
+          format(save_path, best_valid_loss))
     print("use time {} seconds".format(time.time() - begin_time))
 
 
@@ -184,7 +184,7 @@ if __name__ == '__main__':
     parser.add_argument("--load_previous", type=bool, default=False)
     parser.add_argument("--debug", type=bool, default=False)
     parser.add_argument("--config_name", type=str)
-    parser.add_argument("--gpu", type=int)
+    parser.add_argument("--gpu", type=int, default=0)
     parser.add_argument("--parallel", type=bool)
     parser.add_argument("--just_evaluate", type=bool, default=False)
     args = parser.parse_args()
@@ -212,6 +212,8 @@ if __name__ == '__main__':
     model = get_model(
         p_config['model_fn'],
         p_config['model_dict'],
+        p_config['pre_process_module_fn'],
+        p_config['pre_process_module_dict'],
         model_path,
         load_previous=load_previous,
     )
@@ -223,5 +225,9 @@ if __name__ == '__main__':
     train_and_evaluate(model, batch_size, train_data, val_data, test_data, epoches, lr, load_previous, model_path,
                        train_loss_fn, clip_norm, optimizer, optimizer_dict, just_evaluate, epoch_ratio,
                        evaluate_loss_function)
+
+    test_loss, train_test_loss = evaluate(model, test_data, batch_size, evaluate_loss_function,
+             train_loss_fn)
+    print("train_test_loss is {}, test_loss is {}".format(train_test_loss.item(), test_loss))
 
 
