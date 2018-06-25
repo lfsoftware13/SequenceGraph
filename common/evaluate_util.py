@@ -40,6 +40,10 @@ class SequenceExactMatch(Evaluator):
             if gpu_index is not None:
                 target = target.cuda(gpu_index)
 
+        if gpu_index is None:
+            log_probs = log_probs.cpu()
+            target = target.cpu()
+
         _, top1_id = torch.topk(log_probs, k=1, dim=-1)
         top1_id = torch.squeeze(top1_id, dim=-1)
 
@@ -72,7 +76,7 @@ class SequenceExactMatch(Evaluator):
 
 
 if __name__ == "__main__":
-    em_eval = SequenceExactMatch(ignore_token=-1, gpu_index=0)
+    em_eval = SequenceExactMatch(ignore_token=-1, gpu_index=None)
 
     log_probs = torch.Tensor([
         [[0.1, 0.3], [0.2, 0.1], [0.4, 0.3], [0.6, 0.8], [0.2, 0.3]],
@@ -90,11 +94,11 @@ if __name__ == "__main__":
     log_probs = torch.Tensor([
         [[0.1, 0.3], [0.2, 0.1], [0.4, 0.3], [0.6, 0.8], [0.2, 0.3]],
         [[0.2, 0.1], [0.3, 0.4], [0.5, 0.2], [0.7, 0.8], [0.8, 0.9]]
-    ])
+    ]).cuda(0)
     target = torch.LongTensor([
         [1, 0, 0, 1, -1],
         [0, 1, 0, -1, -1]
-    ])
+    ]).cuda(0)
     part = em_eval.add_result_top1(log_probs, target)
     print(part)
 
