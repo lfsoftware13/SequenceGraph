@@ -22,8 +22,8 @@ def load_tokenized_quora_data(debug=False):
     q1 = df['question1'].map(lambda x: str(x))
     q2 = df['question2'].map(lambda x: str(x))
 
-    q1 = nlp_util.parallel_tokenize(4, nlp_util.stanford_tokenize, q1)
-    q2 = nlp_util.parallel_tokenize(4, nlp_util.stanford_tokenize, q2)
+    q1 = nlp_util.parallel_tokenize(10, nlp_util.stanford_tokenize, q1)
+    q2 = nlp_util.parallel_tokenize(10, nlp_util.stanford_tokenize, q2)
 
     df['tokenized_question1'] = q1
     df['tokenized_question2'] = q2
