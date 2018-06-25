@@ -83,4 +83,4 @@ def load_parsed_data(debug=False, word_vector_name="fasttext"):
 
 
 if __name__ == '__main__':
-    print(load_parsed_data(debug=False, word_vector_name="fasttext"))
+    load_parsed_data(debug=False, word_vector_name="fasttext")
