@@ -1,6 +1,6 @@
 from torch import optim, nn
 
-from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord
+from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score
 from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
 from common.util import PaddedList
@@ -64,8 +64,9 @@ def method_name_config1(is_debug, output_log=None):
         "epcohes": 20,
         "lr": 1e-4,
         "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id, ),
+                                 SequenceF1Score(vocab=load_summarization_method_name_vocabulary(), ),
                                  SequenceOutputIDToWord(vocab=load_summarization_method_name_vocabulary(),
-                                                        ignore_token=output_pad_id, file_path=output_log)],
+                                                        ignore_token=output_pad_id, file_path=output_log, )],
     }
 
 
