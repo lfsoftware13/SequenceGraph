@@ -16,6 +16,10 @@ class SequenceExactMatch(Evaluator):
         self.ignore_token = ignore_token
         self.gpu_index = gpu_index
 
+    def clear_result(self):
+        self.batch_count = 0
+        self.match_count = 0
+
     def add_result_top1(self, log_probs, target, ignore_token=None, gpu_index=None):
         """
 
@@ -57,7 +61,7 @@ class SequenceExactMatch(Evaluator):
         self.match_count += batch_match_count
         return batch_match_count / batch_size
 
-    def top1_result(self):
+    def get_top1_result(self):
         return self.match_count / self.batch_count
 
 
@@ -74,9 +78,9 @@ if __name__ == "__main__":
     ]).cuda(0)
     part = em_eval.add_result_top1(log_probs, target)
     part = em_eval.add_result_top1(log_probs, target)
+    em_eval.clear_result()
     part = em_eval.add_result_top1(log_probs, target)
     print(part)
-
     log_probs = torch.Tensor([
         [[0.1, 0.3], [0.2, 0.1], [0.4, 0.3], [0.6, 0.8], [0.2, 0.3]],
         [[0.2, 0.1], [0.3, 0.4], [0.5, 0.2], [0.7, 0.8], [0.8, 0.9]]
@@ -89,4 +93,4 @@ if __name__ == "__main__":
     print(part)
 
     print(em_eval.match_count, em_eval.batch_count)
-    print(em_eval.top1_result())
+    print(em_eval.get_top1_result())
