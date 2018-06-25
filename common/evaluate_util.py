@@ -1,10 +1,29 @@
-import random
+from abc import abstractmethod, ABCMeta
 
 import torch
 
 
-class Evaluator:
-    pass
+class Evaluator(metaclass=ABCMeta):
+    @abstractmethod
+    def clear_result(self):
+        pass
+
+    @abstractmethod
+    def add_result(self, log_probs, target, ignore_token, gpu_index):
+        """
+
+        :param log_probs: [batch, ..., vocab_size]
+        :param target: [batch, ...], LongTensor, padded with target token. target.shape == log_probs.shape[:-1]
+        :param ignore_token: optional, you can choose special ignore token and gpu index for one batch.
+                            or use global value when ignore token and gpu_index is None
+        :param gpu_index:
+        :return:
+        """
+        pass
+
+    @abstractmethod
+    def get_result(self):
+        pass
 
 
 class SequenceExactMatch(Evaluator):
@@ -20,7 +39,7 @@ class SequenceExactMatch(Evaluator):
         self.batch_count = 0
         self.match_count = 0
 
-    def add_result_top1(self, log_probs, target, ignore_token=None, gpu_index=None):
+    def add_result(self, log_probs, target, ignore_token=None, gpu_index=None):
         """
 
         :param log_probs: [batch, ..., vocab_size]
@@ -65,7 +84,7 @@ class SequenceExactMatch(Evaluator):
         self.match_count += batch_match_count
         return batch_match_count / batch_size
 
-    def get_top1_result(self):
+    def get_result(self):
         return self.match_count / self.batch_count
 
     def __str__(self):
@@ -86,10 +105,10 @@ if __name__ == "__main__":
         [0, 0, 0, 1, -1],
         [0, 1, 0, -1, -1]
     ]).cuda(0)
-    part = em_eval.add_result_top1(log_probs, target)
-    part = em_eval.add_result_top1(log_probs, target)
+    part = em_eval.add_result(log_probs, target)
+    part = em_eval.add_result(log_probs, target)
     em_eval.clear_result()
-    part = em_eval.add_result_top1(log_probs, target)
+    part = em_eval.add_result(log_probs, target)
     print(part)
     log_probs = torch.Tensor([
         [[0.1, 0.3], [0.2, 0.1], [0.4, 0.3], [0.6, 0.8], [0.2, 0.3]],
@@ -99,8 +118,8 @@ if __name__ == "__main__":
         [1, 0, 0, 1, -1],
         [0, 1, 0, -1, -1]
     ]).cuda(0)
-    part = em_eval.add_result_top1(log_probs, target)
+    part = em_eval.add_result(log_probs, target)
     print(part)
 
     print(em_eval.match_count, em_eval.batch_count)
-    print(em_eval.get_top1_result())
+    print(em_eval.get_result())

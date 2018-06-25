@@ -1,10 +1,11 @@
 from torch import optim, nn
 
+from common.evaluate_util import SequenceExactMatch
 from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
 from common.util import PaddedList
 from read_data.data_set import OriDataSet
-from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper
+from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
 
 import pandas as pd
 
@@ -60,5 +61,44 @@ def method_name_config1(is_debug):
         "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
         "epcohes": 20,
         "lr": 1e-4,
-        "evaluate_loss_function": lambda: em_loss_fn(ignore_token=output_pad_id),
+        "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id, )],
+    }
+
+
+def method_name_config2(is_debug):
+    from read_data.method_naming.read_experiment_data import load_method_naming_data
+    train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
+        load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
+    return {
+        "model_fn": EncoderDecoderModelWithPairInput,
+        "model_dict": {
+            "embedding_dim": 100,
+            "n_filters": 200,
+            "kernel_size": 5,
+            "padding": 2,
+            "in_vocabulary_size": embedding_size,
+            "hidden_size": 32,
+            "out_vocabulary_size": output_size,
+            "dynamic_graph_n_layer": 2,
+            "graph_attention_n_head": 8,
+            "graph_itr": 5,
+            "leaky_alpha": 0.2,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": pad_id,
+            "begin_idx": begin_id,
+            "hole_idx": hole_id,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": NCE_train_loss,
+        "clip_norm": None,
+        "name": "sequence_graph_encoder_decoder_for_method_name_with_pair_input",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 20,
+        "lr": 1e-4,
+        "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id,)],
     }

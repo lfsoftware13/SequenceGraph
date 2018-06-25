@@ -231,9 +231,6 @@ def calculate_accuracy_of_code_completion(log_probs, target, ignore_token=None, 
     return result
 
 
-def calculate_top_output(log_probs, rank=5)
-
-
 # def get_predict_and_target_tokens(log_probs, target, id_to_word_fn, k=1, offset=0):
 #     _, top_k_ids = torch.topk(log_probs, dim=2, k=k)
 #     top_k_ids = top_k_ids.tolist()
@@ -478,7 +475,7 @@ def repeatRowsTensor(X, rep):
     # Open dim after batch ("depth")
     X = torch.unsqueeze(X, 1)
     # Repeat the matrix in the dim opened ("depth")
-    X = X.repeat(1, rep, 1, 1)
+    X = X.expand(-1, rep, -1, -1)
     # Permute depth and lines to get the repeat over lines
     X = X.permute(0, 2, 1, 3)
     # Return to input (#batch x #lines*#repeat x #cols)

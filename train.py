@@ -7,6 +7,7 @@ import torch.autograd as autograd
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import typing
 from toolz.sandbox import unzip
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -16,6 +17,7 @@ import more_itertools
 
 
 from common import torch_util, util, problem_util
+from common.evaluate_util import Evaluator
 from common.problem_util import to_cuda
 from common.util import data_loader
 from read_data.data_set import OriDataSet
@@ -25,14 +27,14 @@ def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_par
     m = model_fn(
         **parameter
     )
+    # to_cuda(m)
+    m = nn.DataParallel(m.cuda(), device_ids=[0, 1])
+    m = pre_process_module_fn(m, **pre_process_module_parameter)
     if load_previous:
         torch_util.load_model(m, path)
         print("load previous model")
     else:
         print("create new model")
-    # to_cuda(m)
-    m = nn.DataParallel(m.cuda(), device_ids=[0, 1])
-    m = pre_process_module_fn(m, **pre_process_module_parameter)
     return m
 
 
@@ -94,9 +96,10 @@ def train(model, dataset, batch_size, loss_function, optimizer, clip_norm, epoch
     return total_loss/steps
 
 
-def evaluate(model, valid_dataset, batch_size, evaluate_loss_function, train_loss_function):
+def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List[Evaluator], train_loss_function):
     model.eval()
-    total_loss = []
+    for o in evaluate_object_list:
+        o.clear_result()
     train_total_loss = to_cuda(torch.Tensor([0]))
     steps = to_cuda(torch.Tensor([0]))
     for batch_data in data_loader(valid_dataset, batch_size=batch_size, is_shuffle=False, drop_last=False):
@@ -104,10 +107,11 @@ def evaluate(model, valid_dataset, batch_size, evaluate_loss_function, train_los
         predict_logit = model.forward(batch_data)
         target = to_cuda(torch.LongTensor(batch_data['label']))
         train_loss = train_loss_function(predict_logit, target)
+        for evaluator in evaluate_object_list:
+            evaluator.add_result(predict_logit, target)
         train_total_loss += train_loss.data
         steps += 1
-        total_loss.append(evaluate_loss_function(predict_logit, target))
-    return np.mean(total_loss), train_total_loss/steps
+    return evaluate_object_list, train_total_loss/steps
 
 
 def train_and_evaluate(
@@ -123,20 +127,21 @@ def train_and_evaluate(
         optimizer_dict,
         just_evaluate,
         epoch_ratio,
-        evaluate_loss_function,
+        evaluate_object_list,
         ):
     optimizer = optimizer(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, **optimizer_dict)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
     if load_previous:
-        valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_loss_function,
+        valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
                                                 train_loss_function)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
         best_valid_loss = valid_loss
         # best_test_loss = test_loss
-        print(("load the previous mode, validation loss is {}, train validation loss is:{}, " +
-              "test loss is :{}, train_test_loss: {}").format(
-                best_valid_loss, train_valid_loss, best_test_loss, train_test_loss))
+        print("load the previous mode")
+        print("train validation loss is:{}".format(train_valid_loss,))
+        for evaluator in valid_loss:
+            print(evaluator)
         scheduler.step(best_valid_loss)
         if just_evaluate:
             print("just evaluate return")
@@ -149,7 +154,7 @@ def train_and_evaluate(
     # with torch.autograd.profiler.profile() as prof:
     for epoch in range(epoches):
         train_loss = train(model, train_dataset, batch_size, train_loss_function, optimizer, clip_norm, epoch_ratio)
-        valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_loss_function,
+        valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
                                                 train_loss_function)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
@@ -158,17 +163,17 @@ def train_and_evaluate(
         train_valid_loss = train_valid_loss.item()
         # train_test_loss = train_test_loss.item()
 
-        scheduler.step(valid_loss)
+        scheduler.step(train_valid_loss)
 
         if best_valid_loss is None or train_valid_loss > best_valid_loss:
             best_valid_loss = train_valid_loss
             # best_test_loss = train_test_loss
             torch_util.save_model(model, save_path)
 
-        print(
-            ("epoch {}: train loss of {},  valid loss of {}, train validation loss is:{}" +
-             " ").
-            format(epoch, train_loss, valid_loss, train_valid_loss,))
+        print("epoch {}".format(epoch))
+        print("train loss of {},  train validation loss is:{}".format(train_loss, train_valid_loss, ))
+        for evaluator in valid_loss:
+            print(evaluator)
     # print(prof)
     print("The model {} best valid loss is {}".
           format(save_path, best_valid_loss))
@@ -203,7 +208,7 @@ if __name__ == '__main__':
     optimizer = p_config.get("optimizer", optim.SGD)
     optimizer_dict = p_config.get("optimizer_dict", dict())
     epoch_ratio = p_config.get("epoch_ratio", 0.5)
-    evaluate_loss_function = p_config.get("evaluate_loss_function")()
+    evaluate_object_list = p_config.get("evaluate_object_list")
     save_root_path = os.path.join(config.DATA_PATH, p_config.get("name"))
     util.make_dir(save_root_path)
     need_pad = p_config.get("need_pad", False)
@@ -224,10 +229,12 @@ if __name__ == '__main__':
     print("The size of test data: {}".format(len(test_data)))
     train_and_evaluate(model, batch_size, train_data, val_data, test_data, epoches, lr, load_previous, model_path,
                        train_loss_fn, clip_norm, optimizer, optimizer_dict, just_evaluate, epoch_ratio,
-                       evaluate_loss_function)
+                       evaluate_object_list)
 
-    test_loss, train_test_loss = evaluate(model, test_data, batch_size, evaluate_loss_function,
-             train_loss_fn)
-    print("train_test_loss is {}, test_loss is {}".format(train_test_loss.item(), test_loss))
+    test_loss, train_test_loss = evaluate(model, test_data, batch_size, evaluate_object_list,
+                                          train_loss_fn)
+    print("train_test_loss is {}".format(train_test_loss.item(),))
+    for o in  test_loss:
+        print(o)
 
 

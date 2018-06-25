@@ -37,6 +37,7 @@ class GraphAttentionLayer(nn.Module):
         m2 = h.repeat(1, N, 1)
 
         a_input = torch.cat([m1, m2], dim=2)
+        del m1, m2
         e = self.leakyrelu(self.a(a_input).squeeze(-1)).view(batch_size, N, N)
 
         zero_vec = -9e15*torch.ones_like(e)
@@ -93,5 +94,37 @@ class DynamicGraphAdjacentMatrix(nn.Module):
         m1 = torch_util.repeatRowsTensor(node_representation, max_seq_length)
         m2 = node_representation.repeat(1, max_seq_length, 1)
         node_representation = torch.cat([m1, m2], dim=2)
+        del m1, m2
         out = self.link_weight(node_representation)
         return out.view(batch_size, max_seq_length, max_seq_length)
+
+
+class SequenceGraphFramework(nn.Module):
+    def __init__(self,
+                 dynamic_graph_module: nn.Module,
+                 graph_propagate_module: nn.Module):
+        """
+        output of this module is a new node representation
+        :param dynamic_graph_module:
+        This module
+         input a node to node tensor [batch, node_number*node_number, dim],
+         output is a adjacent matrix [batch, node_number, node_number]
+        :param graph_propagate_module:
+        This module
+         input a node to node tensor [batch, node_number*node_number, dim]
+         and a adjacent matrix [batch, node_number. number]
+         output is the new node representation [batch, node_number, dim]
+        """
+        super().__init__()
+        self.dynamic_graph_module = dynamic_graph_module
+        self.graph_propagate_module = graph_propagate_module
+
+    def forward(self, node_representation, fix_graph):
+        # max_seq_length = node_representation.shape[1]
+        # m1 = torch_util.repeatRowsTensor(node_representation, max_seq_length)
+        # m2 = node_representation.repeat(1, max_seq_length, 1)
+        # node_to_node_pair = torch.cat([m1, m2], dim=2)
+        node_to_node_pair = node_representation
+        dynamic_graph = self.dynamic_graph_module(node_to_node_pair)
+        node_representation = self.graph_propagate_module(node_to_node_pair, dynamic_graph+fix_graph) + node_representation
+        return node_representation

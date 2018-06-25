@@ -58,6 +58,49 @@ class EncoderDecoderModel(nn.Module):
         return o
 
 
+class EncoderDecoderModelWithPairInput(nn.Module):
+    def __init__(self,
+                 embedding_dim,
+                 in_vocabulary_size,
+                 n_filters,
+                 kernel_size, padding,
+                 hidden_size,
+                 out_vocabulary_size,
+                 dynamic_graph_n_layer,
+                 graph_attention_n_head,
+                 graph_itr,
+                 leaky_alpha):
+        super().__init__()
+        self._graph_itr = graph_itr
+        self.input_embedding = CharacterEmbedding(in_vocabulary_size, embedding_dim, n_filters,
+                 kernel_size, padding)
+        self.hidden_state_transform = nn.Linear(n_filters, hidden_size * graph_attention_n_head)
+        dynamic_graph = graph_attention_layer.DynamicGraphAdjacentMatrix(input_dim=
+                                                                         hidden_size * graph_attention_n_head,
+                                                                         n_layer=dynamic_graph_n_layer,
+                                                                         )
+        graph_attention = graph_attention_layer.MultiHeadGraphAttentionLayer(hidden_size * graph_attention_n_head,
+                                                                             hidden_size,
+                                                                             0.2,
+                                                                             leaky_alpha,
+                                                                             graph_attention_n_head, )
+        self.sequence_graph = graph_attention_layer.SequenceGraphFramework(
+            dynamic_graph,
+            graph_attention,
+        )
+        self.output = nn.Linear(hidden_size*graph_attention_n_head, out_vocabulary_size)
+
+    def forward(self, encoder_sequence, initial_decoder_sequence, fixed_graph, ):
+        output_begin_idx = encoder_sequence.shape[1]
+        node_representation = self.input_embedding(torch.cat((encoder_sequence, initial_decoder_sequence), dim=1))
+        del encoder_sequence, initial_decoder_sequence
+        node_representation = self.hidden_state_transform(node_representation)
+        for _ in range(self._graph_itr):
+            node_representation = self.sequence_graph(node_representation, fixed_graph)
+        o = self.output(node_representation[:, output_begin_idx:, :])
+        return o
+
+
 class PreprocessWrapper(nn.Module):
     def __init__(self,
                  m,
