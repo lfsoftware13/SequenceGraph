@@ -1,6 +1,6 @@
 from torch import optim, nn
 
-from common.evaluate_util import SequenceExactMatch
+from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord
 from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
 from common.util import PaddedList
@@ -8,6 +8,8 @@ from read_data.data_set import OriDataSet
 from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
 
 import pandas as pd
+
+from read_data.method_naming.load_vocabulary import load_summarization_method_name_vocabulary
 
 
 def em_loss_fn(ignore_token=None,):
@@ -26,7 +28,7 @@ def NCE_train_loss():
     return loss
 
 
-def method_name_config1(is_debug):
+def method_name_config1(is_debug, output_log=None):
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
         load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
@@ -61,7 +63,9 @@ def method_name_config1(is_debug):
         "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
         "epcohes": 20,
         "lr": 1e-4,
-        "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id, )],
+        "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id, ),
+                                 SequenceOutputIDToWord(vocab=load_summarization_method_name_vocabulary(),
+                                                        ignore_token=output_pad_id, file_path=output_log)],
     }
 
 

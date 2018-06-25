@@ -23,12 +23,15 @@ from common.util import data_loader
 from read_data.data_set import OriDataSet
 
 
-def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_parameter, path, load_previous=False,):
+def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_parameter, path, load_previous=False, parallel=False, gpu_index=None):
     m = model_fn(
         **parameter
     )
     # to_cuda(m)
-    m = nn.DataParallel(m.cuda(), device_ids=[0, 1])
+    if parallel:
+        m = nn.DataParallel(m.cuda(), device_ids=[0, 1])
+    elif gpu_index is not None:
+        m = m.cuda(gpu_index)
     m = pre_process_module_fn(m, **pre_process_module_parameter)
     if load_previous:
         torch_util.load_model(m, path)
@@ -108,7 +111,7 @@ def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List
         target = to_cuda(torch.LongTensor(batch_data['label']))
         train_loss = train_loss_function(predict_logit, target)
         for evaluator in evaluate_object_list:
-            evaluator.add_result(predict_logit, target)
+            evaluator.add_result(predict_logit, target, batch_data=batch_data)
         train_total_loss += train_loss.data
         steps += 1
     return evaluate_object_list, train_total_loss/steps
@@ -185,13 +188,19 @@ if __name__ == '__main__':
     import config
     import argparse
 
+    def boolean_string(s):
+        if s not in {'False', 'True'}:
+            raise ValueError('Not a valid boolean string')
+        return s == 'True'
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--load_previous", type=bool, default=False)
-    parser.add_argument("--debug", type=bool, default=False)
+    parser.add_argument("--load_previous", type=boolean_string, default=False)
+    parser.add_argument("--debug", type=boolean_string, default=False)
     parser.add_argument("--config_name", type=str)
     parser.add_argument("--gpu", type=int, default=0)
-    parser.add_argument("--parallel", type=bool)
-    parser.add_argument("--just_evaluate", type=bool, default=False)
+    parser.add_argument("--parallel", type=boolean_string)
+    parser.add_argument("--just_evaluate", type=boolean_string, default=False)
+    parser.add_argument("--output_log", type=str, default=None)
     args = parser.parse_args()
     load_previous = args.load_previous
     problem_util.GPU_INDEX = args.gpu
@@ -199,7 +208,7 @@ if __name__ == '__main__':
     is_debug = args.debug
     just_evaluate = args.just_evaluate
 
-    p_config = parameter_config.__dict__.get(args.config_name)(is_debug)
+    p_config = parameter_config.__dict__.get(args.config_name)(is_debug, args.output_log)
     epoches = p_config.get("epcohes", 20)
     lr = p_config.get("lr", 20)
     batch_size = p_config.get("batch_size", 32)
@@ -221,6 +230,8 @@ if __name__ == '__main__':
         p_config['pre_process_module_dict'],
         model_path,
         load_previous=load_previous,
+        parallel=problem_util.Parallel,
+        gpu_index=problem_util.GPU_INDEX
     )
 
     train_data, val_data, test_data = p_config.get("data")

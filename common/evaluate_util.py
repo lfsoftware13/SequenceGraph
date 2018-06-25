@@ -9,7 +9,7 @@ class Evaluator(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def add_result(self, log_probs, target, ignore_token, gpu_index):
+    def add_result(self, log_probs, target, ignore_token, gpu_index, batch_data):
         """
 
         :param log_probs: [batch, ..., vocab_size]
@@ -39,7 +39,7 @@ class SequenceExactMatch(Evaluator):
         self.batch_count = 0
         self.match_count = 0
 
-    def add_result(self, log_probs, target, ignore_token=None, gpu_index=None):
+    def add_result(self, log_probs, target, ignore_token=None, gpu_index=None, batch_data=None):
         """
 
         :param log_probs: [batch, ..., vocab_size]
@@ -89,6 +89,83 @@ class SequenceExactMatch(Evaluator):
 
     def __str__(self):
         return ' SequenceExactMatch top 1: ' + str(self.match_count / self.batch_count)
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class SequenceOutputIDToWord(Evaluator):
+    def __init__(self, vocab, ignore_token=None, file_path=None):
+        self.vocab = vocab
+        self.ignore_token = ignore_token
+        self.file_path = file_path
+        if file_path is not None:
+            with open(file_path, 'w') as f:
+                pass
+
+    def add_result(self, log_probs, target, ignore_token=None, gpu_index=None, batch_data=None):
+        if self.file_path is None:
+            return
+        if isinstance(target, torch.Tensor):
+            target = target.cpu()
+            target = target.tolist()
+
+        log_probs = log_probs.cpu()
+        _, top_ids = torch.max(log_probs, dim=-1)
+        top_ids = top_ids.tolist()
+
+        input_text = batch_data["text"]
+
+        for one_input, one_top_id, one_target in zip(input_text, top_ids, target):
+            predict_token = self.convert_one_token_ids_to_code(one_top_id, self.vocab.id_to_word)
+            target_token = self.convert_one_token_ids_to_code(one_target, self.vocab.id_to_word)
+            self.save_to_file(one_input, predict_token, target_token)
+
+    def save_to_file(self, input_token=None, predict_token=None, target_token=None):
+        if self.file_path is not None:
+            with open(self.file_path, 'a') as f:
+                f.write('---------------------------------------- one record ----------------------------------------\n')
+                if input_token is not None:
+                    f.write('input: \n')
+                    f.write(str(input_token) + '\n')
+                if predict_token is not None:
+                    f.write('predict: \n')
+                    f.write(predict_token + '\n')
+                if target_token is not None:
+                    f.write('target: \n')
+                    f.write(target_token + '\n')
+
+    def filter_token_ids(self, token_ids, start, end, unk):
+
+        def filter_special_token(token_ids, val):
+            return list(filter(lambda x: x != val, token_ids))
+
+        try:
+            end_position = token_ids.index(end)
+            token_ids = token_ids[:end_position+1]
+        except ValueError as e:
+            end_position = None
+        # token_ids = filter_special_token(token_ids, start)
+        # token_ids = filter_special_token(token_ids, end)
+        token_ids = filter_special_token(token_ids, unk)
+        return token_ids, end_position
+
+    def convert_one_token_ids_to_code(self, token_ids, id_to_word_fn):
+        if not isinstance(token_ids, list):
+            token_ids = list(token_ids)
+        # token_ids, _ = self.filter_token_ids(token_ids, start, end, unk)
+        tokens = [id_to_word_fn(tok) for tok in token_ids]
+        code = ', '.join(tokens)
+        return code
+
+    def clear_result(self):
+        pass
+
+    def get_result(self):
+        pass
+
+    def __str__(self):
+        return ''
 
     def __repr__(self):
         return self.__str__()
