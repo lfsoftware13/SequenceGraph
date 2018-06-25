@@ -139,7 +139,7 @@ def train_and_evaluate(
                                                 train_loss_function)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
-        best_valid_loss = valid_loss
+        best_valid_loss = train_valid_loss
         # best_test_loss = test_loss
         print("load the previous mode")
         print("train validation loss is:{}".format(train_valid_loss,))
