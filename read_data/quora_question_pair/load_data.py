@@ -55,11 +55,11 @@ def load_quora_vocabulary(word_vector_name="fasttext"):
 def load_split_data(debug=False,):
     df = load_tokenized_quora_data(debug=debug)
     if not debug:
-        df = df.drop_duplicates()
+        # df = df.drop_duplicates()
         size = len(df)
-        test = df.sample(n=size*0.1, )
+        test = df.sample(n=int(size*0.1), )
         df = df.drop(test.index)
-        valid = df.sample(n=size*0.1, )
+        valid = df.sample(n=int(size*0.1), )
         train = df.drop(valid.index)
     else:
         train = df.head(100)
