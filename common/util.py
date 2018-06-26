@@ -916,3 +916,26 @@ def create_sequence_node_link(begin_idx, length):
     idy = idx + 1
     self_id = np.arange(begin_idx, begin_idx + length, dtype=np.float)
     return [idx, idy, self_id], [idy, idx, self_id]
+
+
+def create_distance_node_matrix(length):
+    s = np.arange(length)
+    a, b = np.meshgrid(s)
+    distance = np.abs(a-b)
+    distance[np.diag_indices(distance.shape[0])] = np.eye(distance.shape[0])
+    distance -= 1
+    return distance
+
+
+def create_sentence_pair_same_node_matrix(s1, s1_begin, s2, s2_begin):
+    idx = []
+    idy = []
+    data = []
+    for i, t1 in enumerate(s1):
+        for j, t2 in enumerate(s2):
+            if t1 == t2:
+                idx.append(i+s1_begin)
+                idy.append(j++s2_begin)
+                data.append(1)
+    return idx+idy, idy+idx, data+data
+

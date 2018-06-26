@@ -82,5 +82,36 @@ def load_parsed_data(debug=False, word_vector_name="fasttext"):
     return train, valid, test
 
 
+@disk_cache(basename='quora.load_character_vocabulary', directory=CACHE_DATA_PATH)
+def load_character_vocabulary(n_gram):
+    from read_data import character_embedding
+    word_set = load_word_set()
+    character_vocabulary = character_embedding.load_character_vocabulary(n_gram=n_gram, token_list=word_set)
+    return character_vocabulary
+
+
+def map_character(character_vocabulary, df: pd.DataFrame):
+    df['parsed_character_question1'] = character_vocabulary.parse_string_without_padding(df['tokenized_question1'])
+    df['parsed_character_question2'] = character_vocabulary.parse_string_without_padding(df['tokenized_question2'])
+    return df
+
+
+@disk_cache(basename='quora.load_parsed_data_with_character_embedding', directory=CACHE_DATA_PATH)
+def load_parsed_data_with_character_embedding(debug=False, word_vector_name="fasttext", n_gram=1):
+    character_vocabulary = load_character_vocabulary(n_gram=n_gram)
+    train, valid, test = [map_character(character_vocabulary, t) for t in load_parsed_data(debug=debug, word_vector_name=word_vector_name)]
+    return train, valid, test
+
+
 if __name__ == '__main__':
-    load_parsed_data(debug=False, word_vector_name="fasttext")
+    train, valid, test = load_parsed_data(debug=False, word_vector_name="fasttext")
+    q1_length = train['parsed_question1'].map(lambda x: len(x))
+    q2_length = train['parsed_question2'].map(lambda x: len(x))
+    sum_length = [t1+t2 for t1, t2 in zip(q1_length, q2_length)]
+    print("train size:{}, valid size:{},test size:{}".format(len(train), len(valid), len(test)))
+    print("max_length:{}".format(max(sum_length)))
+    print("the train set size:{}".format(len(sum_length)))
+    print("The train set less 200:{}".format(len(list(filter(lambda x: x<200, sum_length)))))
+    print("The train set less 100:{}".format(len(list(filter(lambda x: x<100, sum_length)))))
+    load_character_vocabulary(n_gram=1)
+    load_parsed_data_with_character_embedding(debug=False, word_vector_name="fasttext", n_gram=1)

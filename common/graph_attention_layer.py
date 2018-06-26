@@ -71,7 +71,7 @@ class MultiHeadGraphAttentionLayer(nn.Module):
 
 
 class DynamicGraphAdjacentMatrix(nn.Module):
-    def __init__(self, input_dim, n_layer, dropout=0.2):
+    def __init__(self, input_dim, n_layer, dropout=0.2, activator=nn.Sigmoid()):
         super().__init__()
         self._input_dim = input_dim
         self.structure_information_extracter = Highway(input_size=input_dim, n_layers=n_layer)
@@ -83,7 +83,7 @@ class DynamicGraphAdjacentMatrix(nn.Module):
                                                   nn.ReLU(), nn.Dropout(dropout)]
                                                  for i in
                                                  range(n_layer - 2)])) +
-                    [nn.Linear(input_dim, 1), nn.Sigmoid()]
+                    [nn.Linear(input_dim, 1), activator]
             )
         )
 
