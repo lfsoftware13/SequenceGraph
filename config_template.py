@@ -23,3 +23,4 @@ fasttext_dir = 'fasttext'
 pretrained_fasttext_path = os.path.join(embedding_path, fasttext_dir, 'wiki.en.bin')
 
 multinli_data_path = r'/home/lf/Project/multinli_1.0/multinli_1.0'
+wmt2014_en_de_path = r'/home/lf/Project/WMT2014_en-de'

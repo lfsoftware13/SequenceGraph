@@ -1,6 +1,6 @@
 from common.constants import CACHE_DATA_PATH
 from common.util import disk_cache
-from read_data.multinli.load_multinli_vocabulary import load_multinli_vocabulary
+from read_data.multinli.load_multinli_vocabulary import load_multinli_vocabulary, load_multinli_character_vocabulary
 from read_data.multinli.read_multinli_data import read_multinli_train_valid_data, read_multinli_test_data, \
     read_multinli_split_train_and_valid_data, read_multinli_split_test_data
 
@@ -11,9 +11,11 @@ def load_multinli_data(is_debug, max_total_len=80):
     sentence1: sentence 1
     tokens1: token list of sentence 1, split by ' '
     tokens_id1: token id list of sentence 1 with begin token 1 and end token 1
+    character_ids1:
     sentence2: like before
     tokens2:  like before
     tokens_id2: like before
+    character_ids2:
     tokens_len1: token 1 length
     tokens_len2:
     total_len: token_len1 + token_len2
@@ -30,7 +32,9 @@ def load_multinli_data(is_debug, max_total_len=80):
     for i in range(len(dfs)):
         print(len(dfs[i]))
     vocab = load_multinli_vocabulary()
+    character_vocab = load_multinli_character_vocabulary(n_gram=1)
     dfs = [parse_tokens_id(df, vocab) for df in dfs]
+    dfs = [parse_character_id(df, character_vocab) for df in dfs]
     dfs = [parse_label_id(df) for df in dfs]
     print('after parse token to id')
 
@@ -54,6 +58,12 @@ def parse_tokens_id(df, vocab):
     return df
 
 
+def parse_character_id(df, character_vocab):
+    df['character_ids1'] = character_vocab.parse_string_without_padding(df['tokens1'])
+    df['character_ids2'] = character_vocab.parse_string_without_padding(df['tokens2'])
+    return df
+
+
 def parse_label_id(df):
     df = df[df['gold_label'] != '-']
     result_dict = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
@@ -63,19 +73,21 @@ def parse_label_id(df):
 
 
 if __name__ == '__main__':
-    train_df, valid_df, matched_df, mismatched_df = load_multinli_data(is_debug=False)
-    print(len(train_df))
-    print(len(valid_df))
-    print(len(matched_df))
-    print(len(mismatched_df))
-    train_df = train_df[train_df['gold_label'] != '-']
-    valid_df = valid_df[valid_df['gold_label'] != '-']
-    matched_df = matched_df[matched_df['gold_label'] != '-']
-    mismatched_df = mismatched_df[mismatched_df['gold_label'] != '-']
-    print(len(train_df))
-    print(len(valid_df))
-    print(len(matched_df))
-    print(len(mismatched_df))
-
-    for i in range(10):
-        print(train_df.iloc[i]['label'])
+    train_df, valid_df, matched_df, mismatched_df = load_multinli_data(is_debug=True)
+    print(train_df.iloc[0]['tokens1'])
+    print(train_df.iloc[0]['character_ids1'])
+    # print(len(train_df))
+    # print(len(valid_df))
+    # print(len(matched_df))
+    # print(len(mismatched_df))
+    # train_df = train_df[train_df['gold_label'] != '-']
+    # valid_df = valid_df[valid_df['gold_label'] != '-']
+    # matched_df = matched_df[matched_df['gold_label'] != '-']
+    # mismatched_df = mismatched_df[mismatched_df['gold_label'] != '-']
+    # print(len(train_df))
+    # print(len(valid_df))
+    # print(len(matched_df))
+    # print(len(mismatched_df))
+    #
+    # for i in range(10):
+    #     print(train_df.iloc[i]['label'])
