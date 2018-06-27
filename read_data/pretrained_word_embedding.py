@@ -54,10 +54,14 @@ class FastTextWordEmbedding(WordEmbedding):
 
 
 class Vocabulary(object):
-    def __init__(self, embedding: WordEmbedding, word_set: set, use_position_label: bool):
+    def __init__(self, embedding: WordEmbedding, word_set: set, use_position_label: bool, begin_tokens=None, end_tokens=None):
         self.unk = '<unk>'
-        self.begin = '<BEGIN>'
-        self.end = '<END>'
+        self.begin = ['<BEGIN>']
+        self.end = ['<END>']
+        if begin_tokens is not None:
+            self.begin = begin_tokens
+        if end_tokens is not None:
+            self.end = end_tokens
         self.pad = '<PAD>'
         self.use_position_label = use_position_label
         word_set = sorted(set(word_set))
@@ -65,8 +69,10 @@ class Vocabulary(object):
         self.id_to_word_dict[0] = self.unk
         self.id_to_word_dict[1] = self.pad
         if use_position_label:
-            self.id_to_word_dict[len(self.id_to_word_dict)] = self.begin
-            self.id_to_word_dict[len(self.id_to_word_dict)] = self.end
+            for tok in self.begin:
+                self.id_to_word_dict[len(self.id_to_word_dict)] = tok
+            for tok in self.end:
+                self.id_to_word_dict[len(self.id_to_word_dict)] = tok
         self.word_to_id_dict = util.reverse_dict(self.id_to_word_dict)
         print("The word vocabulary has {} words".format(len(self.word_to_id_dict)))
         self._embedding_matrix = np.array([embedding[b] for a, b in sorted(self.id_to_word_dict.items(), key=lambda x:x[0])])
@@ -87,21 +93,21 @@ class Vocabulary(object):
     def embedding_matrix(self):
         return self._embedding_matrix
 
-    def parse_text(self, texts):
+    def parse_text(self, texts, position_label_index=0):
         """
         :param texts: a list of list of token
         :return:
         """
         if self.use_position_label:
-            texts = [[self.begin] + text + [self.end] for text in texts]
+            texts = [[self.begin[position_label_index]] + text + [self.end[position_label_index]] for text in texts]
         max_text = max(map(lambda x:len(x), texts))
         texts = [[self.word_to_id(token) for token in text] for text in texts]
         texts = [text+[0]*(max_text-len(text)) for text in texts]
         return texts
 
-    def parse_text_without_pad(self, texts):
+    def parse_text_without_pad(self, texts, position_label_index=0):
         if self.use_position_label:
-            texts = [[self.begin] + text + [self.end] for text in texts]
+            texts = [[self.begin[position_label_index]] + text + [self.end[position_label_index]] for text in texts]
         texts = [[self.word_to_id(token) for token in text] for text in texts]
         return texts
 
@@ -110,7 +116,7 @@ class Vocabulary(object):
         return len(self.id_to_word_dict)
 
 
-def load_vocabulary(word_vector_name, text_list, use_position_label=False) -> Vocabulary:
+def load_vocabulary(word_vector_name, text_list, use_position_label=False, begin_tokens=None, end_tokens=None) -> Vocabulary:
     namd_embedding_dict = {"glove": GloveWordEmbedding, "fasttext": FastTextWordEmbedding,}
     word_set = more_itertools.collapse(text_list)
-    return Vocabulary(namd_embedding_dict[word_vector_name](), word_set, use_position_label=use_position_label)
+    return Vocabulary(namd_embedding_dict[word_vector_name](), word_set, use_position_label=use_position_label, begin_tokens=begin_tokens, end_tokens=end_tokens)
