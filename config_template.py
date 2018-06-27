@@ -21,3 +21,5 @@ pretrained_glove_path = os.path.join(embedding_path, glove_dir, 'glove.6B', "glo
 
 fasttext_dir = 'fasttext'
 pretrained_fasttext_path = os.path.join(embedding_path, fasttext_dir, 'wiki.en.bin')
+
+multinli_data_path = r'/home/lf/Project/multinli_1.0/multinli_1.0'
