@@ -19,12 +19,16 @@ class CharacterEmbedding(object):
         self.END = "<END>"
         self.UNK = "<UNK>"
         self.PAD = "<PAD>"
+        self.BEGIN_TOKEN = "<BEGIN_TOKEN>"
+        self.END_TOKEN = "<END_TOKEN>"
         self.n_gram = n_gram
         token_set = set(more_itertools.flatten(map(lambda x: list(self.preprocess_token(x)), token_set)))
         token_set = sorted(list(token_set))
         self.id_to_character_dict = dict(list(enumerate(start=0, iterable=token_set)))
         self.id_to_character_dict[len(self.id_to_character_dict)] = self.UNK
         self.id_to_character_dict[len(self.id_to_character_dict)] = self.PAD
+        self.id_to_character_dict[len(self.id_to_character_dict)] = self.BEGIN_TOKEN
+        self.id_to_character_dict[len(self.id_to_character_dict)] = self.END_TOKEN
         self.character_to_id_dict = util.reverse_dict(self.id_to_character_dict)
 
     def preprocess_token(self, x):
@@ -69,6 +73,8 @@ class CharacterEmbedding(object):
         :return: a list of list of list of characters of tokens
         '''
         string_list = [[self.parse_token(token, character_position_label) for token in l] for l in string_list]
+        string_list = [[[self.character_to_id_dict[self.BEGIN_TOKEN]]] + l + [[self.character_to_id_dict[self.END_TOKEN]]]
+                       for l in string_list]
         return string_list
 
 

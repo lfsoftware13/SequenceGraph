@@ -6,10 +6,12 @@ Parallel = False
 
 
 def to_cuda(x):
-    if not Parallel:
-        return x.cuda(GPU_INDEX)
-    else:
+    if Parallel:
         return x.cuda()
+    elif GPU_INDEX is None:
+        return x.cpu()
+    elif not Parallel:
+        return x.cuda(GPU_INDEX)
 
 
 def get_gpu_index():

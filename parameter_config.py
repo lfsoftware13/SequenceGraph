@@ -1,11 +1,11 @@
 from torch import optim, nn
 
-from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score
+from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score, \
+    SequenceBinaryClassExactMatch
 from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
 from common.util import PaddedList
 from read_data.data_set import OriDataSet
-from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
 
 import pandas as pd
 
@@ -28,7 +28,17 @@ def NCE_train_loss():
     return loss
 
 
+def BCELoss():
+    Loss = nn.BCEWithLogitsLoss()
+
+    def loss(log_probs, target):
+        return Loss(log_probs, target.float())
+
+    return loss
+
+
 def method_name_config1(is_debug, output_log=None):
+    from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
         load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
@@ -71,6 +81,7 @@ def method_name_config1(is_debug, output_log=None):
 
 
 def method_name_config2(is_debug):
+    from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
         load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
@@ -106,4 +117,91 @@ def method_name_config2(is_debug):
         "epcohes": 20,
         "lr": 1e-4,
         "evaluate_object_list": [SequenceExactMatch(ignore_token=output_pad_id,)],
+    }
+
+
+def quora_dataset_config1(is_debug, output_log=None):
+    from model.sentence_pair_graph import SequenceGraphModel, PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="fasttext",
+                               n_gram=1)
+    return {
+        "model_fn": SequenceGraphModel,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+            "character_number": character_size,
+            "character_embedding_dim": 600,
+            "character_n_filters": 200,
+            "character_kernel_size": 5,
+            "character_padding": 2,
+            "n_link_type": 3,
+            "hidden_state_size": 200,
+            "n_dynamic_link_layer": 2,
+            "n_fix_graph": 1,
+            "graph_itr": 5,
+            "n_classes": 2,
+            "summary_node": True,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+            "summary_node": True,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": BCELoss,
+        "clip_norm": 10,
+        "name": "sequence_graph_encoder_decoder_for_method_name",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-4,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+    }
+
+
+def quora_dataset_config2(is_debug, output_log=None):
+    from model.sentence_pair_graph import SequenceGraphModelWithGraphAttention, PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="fasttext",
+                               n_gram=1)
+    return {
+        "model_fn": SequenceGraphModelWithGraphAttention,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+            "character_number": character_size,
+            "mixed": True,
+            "character_embedding_dim": 600,
+            "character_n_filters": 200,
+            "character_kernel_size": 5,
+            "character_padding": 2,
+            "hidden_size": 128,
+            "graph_itr": 6,
+            "dynamic_graph_n_layer": 2,
+            "graph_attention_n_head": 6,
+            "leaky_alpha": 0.2,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+            "summary_node": False,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": BCELoss,
+        "clip_norm": 10,
+        "name": "sequence_graph_encoder_decoder_for_method_name",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-4,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
     }

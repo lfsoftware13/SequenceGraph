@@ -920,10 +920,11 @@ def create_sequence_node_link(begin_idx, length):
 
 def create_distance_node_matrix(length):
     s = np.arange(length)
-    a, b = np.meshgrid(s)
+    a, b = np.meshgrid(s, s)
     distance = np.abs(a-b)
-    distance[np.diag_indices(distance.shape[0])] = np.eye(distance.shape[0])
+    distance[np.diag_indices(distance.shape[0])] = np.eye(distance.shape[0])[np.diag_indices(distance.shape[0])]
     distance -= 1
+    distance *= -1
     return distance
 
 

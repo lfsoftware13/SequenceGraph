@@ -2,18 +2,18 @@ import torch
 from torch import nn
 
 from common.torch_util import Attention
-from common.word_embedding import WordEmbedding
+from common.word_embedding import WordPairEmbedding, WordEmbedding
 from common.highway import Highway
 
 
-class InputEmbedding(nn.Module):
+class InputPairEmbedding(nn.Module):
     
     def __init__(self, word_embeddings, word_embed_dim=300,
                 highway_n_layers=2, mixed=False):
         
-        super(InputEmbedding, self).__init__()
+        super(InputPairEmbedding, self).__init__()
         
-        self.wordEmbedding = WordEmbedding(word_embeddings, mixed=mixed)
+        self.wordEmbedding = WordPairEmbedding(word_embeddings, mixed=mixed)
         highway_input_size = word_embed_dim * (1 + int(mixed))
         self.highway = Highway(input_size=highway_input_size,
                                n_layers=highway_n_layers)
@@ -25,6 +25,21 @@ class InputEmbedding(nn.Module):
         question = self.highway(question)
         
         return context, question
+
+
+class InputEmbedding(nn.Module):
+    def __init__(self, word_embeddings, word_embed_dim=300,
+                highway_n_layers=2, mixed=False):
+        super(InputEmbedding, self).__init__()
+
+        self.wordEmbedding = WordEmbedding(word_embeddings, mixed=mixed)
+        highway_input_size = word_embed_dim * (1 + int(mixed))
+        self.highway = Highway(input_size=highway_input_size,
+                               n_layers=highway_n_layers)
+
+    def forward(self, text):
+        text = self.wordEmbedding(text)
+        return self.highway(text)
 
 
 class RandomInitialInputEmbedding(nn.Module):
@@ -46,7 +61,7 @@ class InputEmbeddingWithMatchTag(nn.Module):
                  highway_n_layers=2, mixed=False):
         super().__init__()
 
-        self.wordEmbedding = WordEmbedding(word_embeddings, mixed=mixed)
+        self.wordEmbedding = WordPairEmbedding(word_embeddings, mixed=mixed)
         highway_input_size = word_embed_dim * (1 + int(mixed)) + 1
         self.highway = Highway(input_size=highway_input_size,
                                n_layers=highway_n_layers)
@@ -67,8 +82,8 @@ class WordCharInputEmbedding(nn.Module):
                  highway_n_layers=2, mixed=False):
         super().__init__()
         assert word_embeddings.shape[1] == char_embeddings.shape[1]
-        self.word_input_embedding = InputEmbedding(word_embeddings, word_embeddings.shape[1], highway_n_layers, mixed)
-        self.char_input_embedding = InputEmbedding(char_embeddings, char_embeddings.shape[1], highway_n_layers, mixed)
+        self.word_input_embedding = InputPairEmbedding(word_embeddings, word_embeddings.shape[1], highway_n_layers, mixed)
+        self.char_input_embedding = InputPairEmbedding(char_embeddings, char_embeddings.shape[1], highway_n_layers, mixed)
         if mixed:
             self.attention = Attention(word_embeddings.shape[1]*2,)
         else:
@@ -81,3 +96,5 @@ class WordCharInputEmbedding(nn.Module):
         _, _, q2_char_embedding = self.attention(q2_word_embedding, q2_char_embedding)
         return torch.cat((q1_word_embedding, q1_char_embedding), dim=-1), \
                torch.cat((q2_word_embedding, q2_char_embedding), dim=-1)
+
+

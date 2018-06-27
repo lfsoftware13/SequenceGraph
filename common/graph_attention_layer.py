@@ -71,7 +71,7 @@ class MultiHeadGraphAttentionLayer(nn.Module):
 
 
 class DynamicGraphAdjacentMatrix(nn.Module):
-    def __init__(self, input_dim, n_layer, dropout=0.2, activator=nn.Sigmoid()):
+    def __init__(self, input_dim, n_layer, dropout=0.2, activator=nn.ReLU()):
         super().__init__()
         self._input_dim = input_dim
         self.structure_information_extracter = Highway(input_size=input_dim, n_layers=n_layer)
@@ -128,3 +128,39 @@ class SequenceGraphFramework(nn.Module):
         dynamic_graph = self.dynamic_graph_module(node_to_node_pair)
         node_representation = self.graph_propagate_module(node_to_node_pair, dynamic_graph+fix_graph) + node_representation
         return node_representation
+
+
+class GGNN(nn.Module):
+    def __init__(self, hidden_state_size):
+        super().__init__()
+        self.gru_cell = nn.GRUCell(hidden_state_size, hidden_state_size)
+        self.b = nn.Parameter(torch.randn(1, 1, hidden_state_size))
+
+    def forward(self, x, adj):
+        """
+        :param x: shape [batch_size, seq, dim]
+        :param adj: [batch_size, seq, seq]
+        :return:
+        """
+        a = torch.bmm(adj, x) + self.b
+        batch_size, seq, dim = x.shape
+        o = self.gru_cell(a.view(-1, dim), x.view(-1, dim))
+        return o.view(batch_size, seq, dim)
+
+
+class MultiLinkTypeGGNN(nn.Module):
+    def __init__(self, n_head, input_size, hidden_state, drop_out=0.2):
+        super().__init__()
+        ls = [nn.Linear(input_size, hidden_state) for _ in range(n_head)]
+        for l in ls:
+            nn.init.xavier_uniform_(l.weight, gain=np.sqrt(2.0))
+        self.content_transformer = nn.ModuleList(
+            [nn.Sequential(*[nn.Dropout(drop_out), l, nn.ReLU()]) for l in ls]
+        )
+        del ls
+        self.ggnns = nn.ModuleList([GGNN(hidden_state) for _ in range(n_head)])
+
+    def forward(self, adjs, x):
+        o = torch.cat(
+            [ggnn(extrater(x), adj) for adj, extrater, ggnn in zip(adjs, self.content_transformer, self.ggnns)], dim=-1)
+        return o

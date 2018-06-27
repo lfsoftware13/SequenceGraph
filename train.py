@@ -41,11 +41,38 @@ def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_par
     return m
 
 
-def train(model, dataset, batch_size, loss_function, optimizer, clip_norm, epoch_ratio):
+def to_numpy(var):
+    namelist = torch.typename(var).split('.')
+    if "sparse" in namelist:
+        var = var.to_dense()
+    return var.cpu().numpy()
+
+
+HAS_NAN = False
+def is_nan(var):
+    if var is None:
+        return "None"
+    res = np.isnan(np.sum(to_numpy(var)))
+    if res:
+        global HAS_NAN
+        HAS_NAN = True
+    return res
+
+
+def show_tensor(var):
+    if var is None:
+        return "None"
+    var = to_numpy(var)
+    return "all zeros:{}, has nan:{}, value:{}".format(np.all(var==0), np.isnan(np.sum(var)), var)
+
+
+def train(model, dataset, batch_size, loss_function, optimizer, clip_norm, epoch_ratio, evaluate_object_list):
     total_loss = to_cuda(torch.Tensor([0]))
     steps = to_cuda(torch.Tensor([0]))
     # previous_char_max = 0
     # previous_word_max = 0
+    for o in evaluate_object_list:
+        o.clear_result()
     model.train()
     for batch_data in data_loader(dataset, batch_size=batch_size, is_shuffle=True, drop_last=True, epoch_ratio=epoch_ratio):
         # print(batch_data['terminal_mask'])
@@ -96,7 +123,9 @@ def train(model, dataset, batch_size, loss_function, optimizer, clip_norm, epoch
         # print("loss：{}".format(loss.data))
         total_loss += loss.data
         steps += 1
-    return total_loss/steps
+        for evaluator in evaluate_object_list:
+            evaluator.add_result(log_probs, label, batch_data=batch_data)
+    return evaluate_object_list, total_loss/steps
 
 
 def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List[Evaluator], train_loss_function):
@@ -156,13 +185,19 @@ def train_and_evaluate(
     begin_time = time.time()
     # with torch.autograd.profiler.profile() as prof:
     for epoch in range(epoches):
-        train_loss = train(model, train_dataset, batch_size, train_loss_function, optimizer, clip_norm, epoch_ratio)
+        evaluate_train_loss, train_loss = train(model, train_dataset, batch_size, train_loss_function, optimizer,
+                                                clip_norm, epoch_ratio,
+                                                evaluate_object_list)
+        print("epoch {}".format(epoch))
+        print("train loss of {},".format(train_loss.item(), ))
+        for evaluator in evaluate_train_loss:
+            print(evaluator)
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
                                                 train_loss_function)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
 
-        train_loss = train_loss.item()
+        # train_loss = train_loss.item()
         train_valid_loss = train_valid_loss.item()
         # train_test_loss = train_test_loss.item()
 
@@ -173,8 +208,7 @@ def train_and_evaluate(
             # best_test_loss = train_test_loss
             torch_util.save_model(model, save_path)
 
-        print("epoch {}".format(epoch))
-        print("train loss of {},  train validation loss is:{}".format(train_loss, train_valid_loss, ))
+        print("train validation loss is:{}".format(train_valid_loss, ))
         for evaluator in valid_loss:
             print(evaluator)
     # print(prof)
@@ -197,7 +231,7 @@ if __name__ == '__main__':
     parser.add_argument("--load_previous", type=boolean_string, default=False)
     parser.add_argument("--debug", type=boolean_string, default=False)
     parser.add_argument("--config_name", type=str)
-    parser.add_argument("--gpu", type=int, default=0)
+    parser.add_argument("--gpu", type=int, default=None)
     parser.add_argument("--parallel", type=boolean_string)
     parser.add_argument("--just_evaluate", type=boolean_string, default=False)
     parser.add_argument("--output_log", type=str, default=None)

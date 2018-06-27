@@ -10,7 +10,11 @@ class Highway(nn.Module):
         self.n_layers = n_layers
         
         self.transform = nn.ModuleList([nn.Linear(in_features=input_size, out_features=input_size) for i in range(n_layers)])
+        for t in self.transform:
+            nn.init.xavier_uniform_(t.weight, gain=nn.init.calculate_gain("relu"))
         self.fc = nn.ModuleList([nn.Linear(in_features=input_size, out_features=input_size) for i in range(n_layers)])
+        for t in self.fc:
+            nn.init.xavier_uniform_(t.weight, gain=nn.init.calculate_gain("relu"))
         
     def forward(self, x):
         
