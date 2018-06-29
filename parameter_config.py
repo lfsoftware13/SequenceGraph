@@ -125,15 +125,15 @@ def quora_dataset_config1(is_debug, output_log=None):
     from read_data.quora_question_pair.load_data import load_parsed_quora_data
     train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
         load_parsed_quora_data(debug=is_debug,
-                               word_vector_name="fasttext",
+                               word_vector_name="glove_300d",
                                n_gram=1)
     return {
         "model_fn": SequenceGraphModel,
         "model_dict": {
             "word_embedding": embedding_matrix,
             "character_number": character_size,
-            "character_embedding_dim": 600,
-            "character_n_filters": 200,
+            "character_embedding_dim": 16,
+            "character_n_filters": 32,
             "character_kernel_size": 5,
             "character_padding": 2,
             "n_link_type": 3,
@@ -142,7 +142,8 @@ def quora_dataset_config1(is_debug, output_log=None):
             "n_fix_graph": 1,
             "graph_itr": 5,
             "n_classes": 2,
-            "summary_node": True,
+            "summary_node": False,
+            "tie_weight": False,
         },
         "pre_process_module_fn": PreprocessWrapper,
         "pre_process_module_dict": {
@@ -169,7 +170,7 @@ def quora_dataset_config2(is_debug, output_log=None):
     from read_data.quora_question_pair.load_data import load_parsed_quora_data
     train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
         load_parsed_quora_data(debug=is_debug,
-                               word_vector_name="fasttext",
+                               word_vector_name="glove_300d",
                                n_gram=1)
     return {
         "model_fn": SequenceGraphModelWithGraphAttention,
@@ -192,6 +193,86 @@ def quora_dataset_config2(is_debug, output_log=None):
             "pad_idx": word_pad_id,
             "character_pad_idx": character_pad_id,
             "summary_node": False,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": BCELoss,
+        "clip_norm": 10,
+        "name": "sequence_graph_encoder_decoder_for_method_name",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-4,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+    }
+
+
+def quora_dataset_config3(is_debug, output_log=None):
+    from model.self_attention_model import SelfAttentionPairModel, PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="fasttext",
+                               n_gram=1)
+    return {
+        "model_fn": SelfAttentionPairModel,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+            "character_number": character_size,
+            "character_embedding_dim": 600,
+            "character_n_filters": 200,
+            "character_kernel_size": 5,
+            "character_padding": 2,
+            "self_attention_layer": 5,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": BCELoss,
+        "clip_norm": 10,
+        "name": "sequence_graph_encoder_decoder_for_method_name",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-4,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+    }
+
+
+def quora_dataset_config4(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from model.graph_cluster_model import GraphClusterModel
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="glove_300d",
+                               n_gram=1)
+    return {
+        "model_fn": GraphClusterModel,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+            "character_number": character_size,
+            "character_embedding_dim": 600,
+            "character_n_filters": 200,
+            "character_kernel_size": 5,
+            "character_padding": 2,
+            "hidden_size": 128, "conv_type": 'normal',
+            "resize_kernel_size": 7, "resize_pad_size": 3,
+            "n_encoder_conv_layer": 2, "encoder_kernel_size": 7, "encoder_padding": 3,
+            "n_self_attention_heads": 8, "route_number": 3, "n_capsules": 20,
+            "capsules_dim": 256, "n_compare_layer": 2, "n_layer_output_conv": 2,
+            "n_layer_output_feedforward": 3, "hidden_size_output_feedforward": 128, "n_classes": 2, "dropout": 0.2
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
         },
         "data": [train, valid, test],
         "batch_size": 8,

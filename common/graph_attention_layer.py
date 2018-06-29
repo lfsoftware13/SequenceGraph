@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from common.feed_forward_block import MultiLayerFeedForwardLayer
 from common.highway import Highway
 from common import torch_util
 
@@ -97,6 +98,27 @@ class DynamicGraphAdjacentMatrix(nn.Module):
         del m1, m2
         out = self.link_weight(node_representation)
         return out.view(batch_size, max_seq_length, max_seq_length)
+
+
+class NodeRelationPrediction(nn.Module):
+    def __init__(self, input_dim, n_layer, dropout=0.2, activator=nn.ReLU(), symmetry=False):
+        super().__init__()
+        self._input_dim = input_dim
+        self.structure_information_extracter = Highway(input_size=input_dim, n_layers=n_layer)
+        self.symmetry = symmetry
+        self.compare_block = MultiLayerFeedForwardLayer(n_layer, 4*input_dim, 4*input_dim,
+                                                        4*input_dim, dropout, activator=activator)
+
+    def forward(self, n1, n2):
+        batch_size = n1.shape[0]
+        n2_length = n2.shape[1]
+        n1_length = n1.shape[1]
+        n1 = self.structure_information_extracter(n1)
+        n2 = self.structure_information_extracter(n2)
+        n1 = torch_util.repeatRowsTensor(n1, n2_length)
+        n2 = n2.repeat(1, n1_length, 1)
+        n = torch.cat([n1, n2, n1+n2, torch.abs(n1-n2) if self.symmetry else n1-n2], dim=2)
+        return self.compare_block(n).view(batch_size, n1_length, n2_length, -1)
 
 
 class SequenceGraphFramework(nn.Module):

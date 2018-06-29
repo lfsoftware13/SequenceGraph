@@ -18,6 +18,7 @@ summarization_source_code_to_method_name_path = r'/home/lf/Project/SequenceGraph
 embedding_path = os.path.join('/', 'home', 'wlw', 'dataset', 'embedding')
 glove_dir = 'glove'
 pretrained_glove_path = os.path.join(embedding_path, glove_dir, 'glove.6B', "glove.6B.100d.txt")
+pretrained_glove_300d_path = os.path.join(embedding_path, glove_dir, 'glove.840B.300d', 'glove.840B.300d.txt')
 
 fasttext_dir = 'fasttext'
 pretrained_fasttext_path = os.path.join(embedding_path, fasttext_dir, 'wiki.en.bin')

@@ -110,6 +110,8 @@ def load_parsed_quora_data(debug=False, word_vector_name="fasttext", n_gram=1):
         res = []
         for row in df.iterrows():
             row = row[1]
+            if len(row['tokenized_question1']) + len(row['tokenized_question2']) > 100:
+                continue
             res.append(
                 {
                     "q1_str": row['tokenized_question1'],

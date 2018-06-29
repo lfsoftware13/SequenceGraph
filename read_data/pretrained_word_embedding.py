@@ -29,6 +29,14 @@ class WordEmbedding(object):
         return r
 
 
+def is_float(x):
+    try:
+        float(x)
+        return True
+    except Exception:
+        return False
+
+
 def loadGloveModel(gloveFile):
     print("Loading Glove Model")
     f = open(gloveFile, 'r', encoding='utf-8')
@@ -36,7 +44,16 @@ def loadGloveModel(gloveFile):
     for line in f:
         splitLine = line.split()
         word = splitLine[0]
-        embedding = np.array([float(val) for val in splitLine[1:]])
+        begin = 1
+        while True:
+            if begin >= len(splitLine):
+                break
+            if is_float(splitLine[begin]):
+                break
+            else:
+                word += ' ' + splitLine[begin]
+                begin += 1
+        embedding = np.array([float(val) for val in splitLine[begin:]])
         model[word] = embedding
     print("Done.", len(model), " words loaded!")
     return model
@@ -45,6 +62,11 @@ def loadGloveModel(gloveFile):
 class GloveWordEmbedding(WordEmbedding):
     def __init__(self):
         super().__init__(loadGloveModel(config.pretrained_glove_path))
+
+
+class Glove300dWordEmbedding(WordEmbedding):
+    def __init__(self):
+        super().__init__(loadGloveModel(config.pretrained_glove_300d_path))
 
 
 class FastTextWordEmbedding(WordEmbedding):
@@ -117,6 +139,8 @@ class Vocabulary(object):
 
 
 def load_vocabulary(word_vector_name, text_list, use_position_label=False, begin_tokens=None, end_tokens=None) -> Vocabulary:
-    namd_embedding_dict = {"glove": GloveWordEmbedding, "fasttext": FastTextWordEmbedding,}
+    namd_embedding_dict = {"glove": GloveWordEmbedding, "fasttext": FastTextWordEmbedding,
+                           "glove_300d": Glove300dWordEmbedding}
     word_set = more_itertools.collapse(text_list)
-    return Vocabulary(namd_embedding_dict[word_vector_name](), word_set, use_position_label=use_position_label, begin_tokens=begin_tokens, end_tokens=end_tokens)
+    return Vocabulary(namd_embedding_dict[word_vector_name](), word_set, use_position_label=use_position_label,
+                      begin_tokens=begin_tokens, end_tokens=end_tokens)

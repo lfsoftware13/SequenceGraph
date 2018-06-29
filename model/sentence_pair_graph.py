@@ -42,9 +42,10 @@ class SequenceGraphModel(nn.Module):
                 [graph_attention_layer.DynamicGraphAdjacentMatrix(hidden_state_size * n_link_type,
                                                                   n_dynamic_link_layer)
                  for _ in range(n_link_type-n_fix_graph)])
-            self.multi_type_graph = graph_attention_layer.MultiLinkTypeGGNN(n_link_type - n_fix_graph,
+            self.multi_type_graph = graph_attention_layer.MultiLinkTypeGGNN(n_link_type,
                                                                             hidden_state_size * n_link_type,
                                                                             hidden_state_size)
+        self.transformer = nn.Linear(hidden_state_size * n_link_type, hidden_state_size * n_link_type)
         self.tie_weight = tie_weight
         self.graph_itr = graph_itr
         self.summary_node = summary_node
@@ -76,11 +77,11 @@ class SequenceGraphModel(nn.Module):
             else:
                 adjs = [dynamic_link_predictor(hidden) for dynamic_link_predictor in self.dynamic_link_predictor]
                 hidden = self.multi_type_graph([distance_matrix, ] + adjs, hidden) + hidden
+            # hidden = self.transformer(hidden) + hidden
             hidden_list.append(hidden)
         if not self.summary_node:
             o, _ = torch.max(torch.cat(hidden_list, dim=-1), dim=1)
             # o, _ = torch.max(hidden, dim=1)
-
         else:
             s1_summary = torch.cat([h[:, -2, :] for h in hidden_list], dim=-1)
             s2_summary = torch.cat([h[:, -1, :] for h in hidden_list], dim=-1)
