@@ -3,6 +3,7 @@ from common.util import disk_cache
 from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
 from read_data.snli.read_snli_data import read_snli_split_train_data, read_snli_split_valid_data, \
     read_snli_split_test_data
+import pandas as pd
 
 
 @disk_cache(basename='snli.load_snli_data', directory=CACHE_DATA_PATH)
@@ -71,6 +72,29 @@ def parse_label_id(df):
     parse_fn = lambda x: result_dict[x]
     df['label'] = df['gold_label'].map(parse_fn)
     return df
+
+
+@disk_cache(basename='snli.load_dict_data', directory=CACHE_DATA_PATH)
+def load_dict_data(debug=False, max_len=80, word_vector_name='glove_300d'):
+    def to_dict(df: pd.DataFrame):
+        res = []
+        for row in df.iterrows():
+            row = row[1]
+            # if len(row['tokenized_question1']) + len(row['tokenized_question2']) > 100:
+            #     continue
+            res.append(
+                {
+                    "q1_str": row['tokens1'],
+                    "q2_str": row['tokens2'],
+                    "s1": row['tokens_id1'],
+                    "s2": row['tokens_id2'],
+                    "s1_char": row['character_ids1'],
+                    "s2_char": row['character_ids2'],
+                    "label": row['label'],
+                }
+            )
+        return res
+    return [to_dict(df) for df in load_snli_data(is_debug=debug, max_total_len=max_len, word_vector_name=word_vector_name)]
 
 
 if __name__ == '__main__':

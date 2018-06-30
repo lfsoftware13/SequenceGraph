@@ -38,11 +38,11 @@ class ConvolutionBlock(nn.Module):
         self._self_attention = self_attention
 
     def forward(self, x):
-        x += self.dropout(self.activator(self.norm(self.conv(x))))
+        x = self.dropout(self.activator(self.norm(self.conv(x)))) + x
         if self._self_attention:
             tmp = self.atten_norm(x).permute(0, 2, 1)
             tmp = self.atten(tmp).permute(0, 2, 1)
-            x += tmp
+            x = x + tmp
         return x
 
 
@@ -71,13 +71,13 @@ class GraphClusterModel(nn.Module):
                                                 num_routing=route_number, )
         self.compare_block = NodeRelationPrediction(capsules_dim, n_compare_layer, symmetry=True)
         self.output_conv = nn.Sequential(
-            *[ConvolutionLayer(int(capsules_dim * 4 * math.pow(2, i)), int(capsules_dim * 4 * math.pow(2, i + 1)),
+            *[ConvolutionLayer(int(capsules_dim * math.pow(2, i)), int(capsules_dim * math.pow(2, i + 1)),
                                kernel_size=encoder_kernel_size, padding=encoder_padding,
                                dropout=dropout) for i in range(n_layer_output_conv)]
         )
         self.output_fc = MultiLayerFeedForwardLayer(
             n_layer=n_layer_output_feedforward,
-            input_dim=capsules_dim*n_capsules*4/math.pow(2, n_layer_output_conv),
+            input_dim=capsules_dim*n_capsules*n_capsules/math.pow(2, n_layer_output_conv),
             hidden_size=hidden_size_output_feedforward,
             output_dim=1 if n_classes == 2 else n_classes,
             dropout=dropout, last_no_activate=True
@@ -94,8 +94,10 @@ class GraphClusterModel(nn.Module):
         for conv in self.conv_list:
             q1 = conv(q1)
             q2 = conv(q2)
-        q1 = self.capsules_routing(squash(q1.permute(0, 2, 1)))
-        q2 = self.capsules_routing(squash(q2.permute(0, 2, 1)))
+        q1 = q1.permute(0, 2, 1)
+        q2 = q2.permute(0, 2, 1)
+        q1 = self.capsules_routing(squash(q1))
+        q2 = self.capsules_routing(squash(q2))
         compare_matrix = self.compare_block(q1, q2).permute(0, 3, 1, 2)
         del q1, q2
         compare_matrix = self.output_conv(compare_matrix)

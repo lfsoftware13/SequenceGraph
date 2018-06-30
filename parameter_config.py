@@ -4,10 +4,6 @@ from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, Seq
     SequenceBinaryClassExactMatch
 from common.problem_util import get_gpu_index
 from common.torch_util import calculate_accuracy_of_code_completion
-from common.util import PaddedList
-from read_data.data_set import OriDataSet
-
-import pandas as pd
 
 from read_data.method_naming.load_vocabulary import load_summarization_method_name_vocabulary
 
@@ -38,7 +34,7 @@ def BCELoss():
 
 
 def method_name_config1(is_debug, output_log=None):
-    from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
+    from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
         load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
@@ -81,7 +77,7 @@ def method_name_config1(is_debug, output_log=None):
 
 
 def method_name_config2(is_debug):
-    from model.encoder_decoder_graph import EncoderDecoderModel, PreprocessWrapper, EncoderDecoderModelWithPairInput
+    from model.encoder_decoder_graph import PreprocessWrapper, EncoderDecoderModelWithPairInput
     from read_data.method_naming.read_experiment_data import load_method_naming_data
     train, valid, test, embedding_size, pad_id, unk_id, begin_id, hole_id, output_size, output_pad_id = \
         load_method_naming_data(12, is_debug=is_debug, max_token_length=200)
@@ -258,15 +254,15 @@ def quora_dataset_config4(is_debug, output_log=None):
         "model_dict": {
             "word_embedding": embedding_matrix,
             "character_number": character_size,
-            "character_embedding_dim": 600,
-            "character_n_filters": 200,
+            "character_embedding_dim": 16,
+            "character_n_filters": 32,
             "character_kernel_size": 5,
             "character_padding": 2,
-            "hidden_size": 128, "conv_type": 'normal',
+            "hidden_size": 128, "conv_type": "depthwise_separable",
             "resize_kernel_size": 7, "resize_pad_size": 3,
             "n_encoder_conv_layer": 2, "encoder_kernel_size": 7, "encoder_padding": 3,
-            "n_self_attention_heads": 8, "route_number": 3, "n_capsules": 20,
-            "capsules_dim": 256, "n_compare_layer": 2, "n_layer_output_conv": 2,
+            "n_self_attention_heads": 4, "route_number": 3, "n_capsules": 32,
+            "capsules_dim": 128, "n_compare_layer": 2, "n_layer_output_conv": 2,
             "n_layer_output_feedforward": 3, "hidden_size_output_feedforward": 128, "n_classes": 2, "dropout": 0.2
         },
         "pre_process_module_fn": PreprocessWrapper,
@@ -275,14 +271,211 @@ def quora_dataset_config4(is_debug, output_log=None):
             "character_pad_idx": character_pad_id,
         },
         "data": [train, valid, test],
-        "batch_size": 8,
+        "batch_size": 16,
         "train_loss": BCELoss,
-        "clip_norm": 10,
+        "clip_norm": None,
         "name": "sequence_graph_encoder_decoder_for_method_name",
         "optimizer": optim.Adam,
         "need_pad": True,
         "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
         "epcohes": 80,
-        "lr": 1e-4,
+        "lr": 1e-2,
         "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+    }
+
+
+def quora_dataset_config5(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="glove_300d",
+                               n_gram=1)
+    from qanet.qanet import QANet
+    return {
+        "model_fn": QANet,
+        "model_dict": {
+            "word_embedding_matrix": embedding_matrix, "char_embedding_matrix": None,
+            "params": {
+
+                "word_embed_dim": 300,
+
+                "highway_n_layers": 2,
+
+                "hidden_size": 128,
+
+                "embed_encoder_resize_kernel_size": 7,
+                "embed_encoder_resize_pad": 3,
+
+                "embed_encoder_n_blocks": 1,
+                "embed_encoder_n_conv": 4,
+                "embed_encoder_kernel_size": 7,
+                "embed_encoder_pad": 3,
+                "embed_encoder_conv_type": "depthwise_separable",
+                "embed_encoder_with_self_attn": False,
+                "embed_encoder_n_heads": 8,
+
+                "model_encoder_n_blocks": 7,
+                "model_encoder_n_conv": 2,
+                "model_encoder_kernel_size": 7,
+                "model_encoder_pad": 3,
+                "model_encoder_conv_type": "depthwise_separable",
+                "model_encoder_with_self_attn": False,
+                "model_encoder_n_heads": 8,
+
+                "batch_size": 32,
+            }
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+        },
+        "data": [train, valid, test],
+        "batch_size": 64,
+        "train_loss": BCELoss,
+        "clip_norm": None,
+        "name": "qa_net",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.8, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 0.001,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.25,
+    }
+
+
+def quora_dataset_config6(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="glove_300d",
+                               n_gram=1)
+    from model.feed_forward_network import FFN
+    return {
+        "model_fn": FFN,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+        },
+        "data": [train, valid, test],
+        "batch_size": 516,
+        "train_loss": BCELoss,
+        "clip_norm": None,
+        "name": "FFN_try",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-3,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.25,
+    }
+
+
+def quora_dataset_config7(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from read_data.quora_question_pair.load_data import load_parsed_quora_data
+    train, valid, test, embedding_matrix, character_size, word_pad_id, character_pad_id = \
+        load_parsed_quora_data(debug=is_debug,
+                               word_vector_name="glove_300d",
+                               n_gram=1)
+    from model.feed_forward_network import FFNWithCrossCompare
+    return {
+        "model_fn": FFNWithCrossCompare,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": word_pad_id,
+            "character_pad_idx": character_pad_id,
+        },
+        "data": [train, valid, test],
+        "batch_size": 128,
+        "train_loss": BCELoss,
+        "clip_norm": None,
+        "name": "FFN_try",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-3,
+        "evaluate_object_list": [SequenceBinaryClassExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.25,
+    }
+
+
+def snli_config1(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from read_data.snli.read_snli_experiment_data import load_dict_data
+    from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+    train, valid, test = load_dict_data(debug=is_debug, )
+    vocabulary = load_snli_vocabulary("glove_300d")
+    character_vocabulary = load_snli_character_vocabulary(n_gram=1)
+    from model.feed_forward_network import FFN
+    return {
+        "model_fn": FFN,
+        "model_dict": {
+            "word_embedding": vocabulary.embedding_matrix,
+            "n_classes": 3,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": vocabulary.word_to_id(vocabulary.pad),
+            "character_pad_idx": character_vocabulary.character_to_id_dict[character_vocabulary.PAD],
+        },
+        "data": [train, valid, test],
+        "batch_size": 516,
+        "train_loss": nn.CrossEntropyLoss,
+        "clip_norm": None,
+        "name": "FFN_snli",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-3,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.1,
+    }
+
+
+def snli_config2(is_debug, output_log=None):
+    from model.self_attention_model import PreprocessWrapper
+    from read_data.snli.read_snli_experiment_data import load_dict_data
+    from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+    train, valid, test = load_dict_data(debug=is_debug, )
+    vocabulary = load_snli_vocabulary("glove_300d")
+    character_vocabulary = load_snli_character_vocabulary(n_gram=1)
+    from model.feed_forward_network import FFNWithCrossCompare
+    return {
+        "model_fn": FFNWithCrossCompare,
+        "model_dict": {
+            "word_embedding": vocabulary.embedding_matrix,
+            "n_classes": 3,
+            "hidden_size": 128*4,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": vocabulary.word_to_id(vocabulary.pad),
+            "character_pad_idx": character_vocabulary.character_to_id_dict[character_vocabulary.PAD],
+        },
+        "data": [train, valid, test],
+        "batch_size": 32,
+        "train_loss": nn.CrossEntropyLoss,
+        "clip_norm": None,
+        "name": "FFN_snli",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 80,
+        "lr": 1e-3,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.1,
     }

@@ -106,8 +106,8 @@ class NodeRelationPrediction(nn.Module):
         self._input_dim = input_dim
         self.structure_information_extracter = Highway(input_size=input_dim, n_layers=n_layer)
         self.symmetry = symmetry
-        self.compare_block = MultiLayerFeedForwardLayer(n_layer, 4*input_dim, 4*input_dim,
-                                                        4*input_dim, dropout, activator=activator)
+        self.compare_block = MultiLayerFeedForwardLayer(n_layer, 4*input_dim, input_dim,
+                                                        input_dim, dropout, activator=activator)
 
     def forward(self, n1, n2):
         batch_size = n1.shape[0]
