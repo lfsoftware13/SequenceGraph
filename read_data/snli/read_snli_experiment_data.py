@@ -6,7 +6,7 @@ from read_data.snli.read_snli_data import read_snli_split_train_data, read_snli_
 
 
 @disk_cache(basename='snli.load_snli_data', directory=CACHE_DATA_PATH)
-def load_snli_data(is_debug, max_total_len=80):
+def load_snli_data(is_debug, max_total_len=80, word_vector_name='glove_300d'):
     """
     sentence1: sentence 1
     tokens1: token list of sentence 1, split by ' '
@@ -32,7 +32,7 @@ def load_snli_data(is_debug, max_total_len=80):
     print('after read data: ')
     for i in range(len(dfs)):
         print(len(dfs[i]))
-    vocab = load_snli_vocabulary()
+    vocab = load_snli_vocabulary(word_vector_name)
     character_vocab = load_snli_character_vocabulary(n_gram=1)
     dfs = [parse_tokens_id(df, vocab) for df in dfs]
     dfs = [parse_character_id(df, character_vocab) for df in dfs]
@@ -74,7 +74,7 @@ def parse_label_id(df):
 
 
 if __name__ == '__main__':
-    train_df, valid_df, test_df = load_snli_data(is_debug=True)
+    train_df, valid_df, test_df = load_snli_data(is_debug=False)
     print(train_df.iloc[0]['tokens1'])
     print(train_df.iloc[0]['character_ids1'])
     print(len(train_df))
