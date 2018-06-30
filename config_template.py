@@ -22,6 +22,8 @@ pretrained_glove_300d_path = os.path.join(embedding_path, glove_dir, 'glove.840B
 
 fasttext_dir = 'fasttext'
 pretrained_fasttext_path = os.path.join(embedding_path, fasttext_dir, 'wiki.en.bin')
+pretrained_fasttext_de_path = r'/home/lf/Project/wiki.de/wiki.de.bin'
 
 multinli_data_path = r'/home/lf/Project/multinli_1.0/multinli_1.0'
+snli_data_path = r'/home/lf/Project/snli_1.0/snli_1.0'
 wmt2014_en_de_path = r'/home/lf/Project/WMT2014_en-de'

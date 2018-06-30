@@ -55,7 +55,7 @@ def read_multinli_split_train_and_valid_data():
 
 
 def split_sentence_blank(df):
-    split_fn = lambda x: x.split(' ')
+    split_fn = lambda x: x.strip().split()
     df['tokens1'] = df['sentence1'].map(split_fn)
     df['tokens2'] = df['sentence2'].map(split_fn)
     return df
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     train_df, valid_df = read_multinli_train_valid_data()
     matched_df, mismatch_df = read_multinli_test_data()
     def print_total_len(df):
-        split_len_fn = lambda x: len(x.split(' '))
+        split_len_fn = lambda x: len(x.split())
         df['sentence1_len'] = df['sentence1'].map(split_len_fn)
         df['sentence2_len'] = df['sentence2'].map(split_len_fn)
         df['total_len'] = df['sentence1_len'] + df['sentence2_len']

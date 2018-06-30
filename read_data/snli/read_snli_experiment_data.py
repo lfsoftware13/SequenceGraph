@@ -1,12 +1,12 @@
 from common.constants import CACHE_DATA_PATH
 from common.util import disk_cache
-from read_data.multinli.load_multinli_vocabulary import load_multinli_vocabulary, load_multinli_character_vocabulary
-from read_data.multinli.read_multinli_data import read_multinli_train_valid_data, read_multinli_test_data, \
-    read_multinli_split_train_and_valid_data, read_multinli_split_test_data
+from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+from read_data.snli.read_snli_data import read_snli_split_train_data, read_snli_split_valid_data, \
+    read_snli_split_test_data
 
 
-@disk_cache(basename='load_multinli_data', directory=CACHE_DATA_PATH)
-def load_multinli_data(is_debug, max_total_len=80):
+@disk_cache(basename='snli.load_snli_data', directory=CACHE_DATA_PATH)
+def load_snli_data(is_debug, max_total_len=80):
     """
     sentence1: sentence 1
     tokens1: token list of sentence 1, split by ' '
@@ -25,14 +25,15 @@ def load_multinli_data(is_debug, max_total_len=80):
     :param max_total_len:
     :return: dataframe obj
     """
-    train_df, valid_df = read_multinli_split_train_and_valid_data()
-    matched_df, mismatched_df = read_multinli_split_test_data()
-    dfs = [train_df, valid_df, matched_df, mismatched_df]
+    train_df = read_snli_split_train_data()
+    valid_df = read_snli_split_valid_data()
+    test_df = read_snli_split_test_data()
+    dfs = [train_df, valid_df, test_df]
     print('after read data: ')
     for i in range(len(dfs)):
         print(len(dfs[i]))
-    vocab = load_multinli_vocabulary()
-    character_vocab = load_multinli_character_vocabulary(n_gram=1)
+    vocab = load_snli_vocabulary()
+    character_vocab = load_snli_character_vocabulary(n_gram=1)
     dfs = [parse_tokens_id(df, vocab) for df in dfs]
     dfs = [parse_character_id(df, character_vocab) for df in dfs]
     dfs = [parse_label_id(df) for df in dfs]
@@ -73,13 +74,12 @@ def parse_label_id(df):
 
 
 if __name__ == '__main__':
-    train_df, valid_df, matched_df, mismatched_df = load_multinli_data(is_debug=True)
+    train_df, valid_df, test_df = load_snli_data(is_debug=True)
     print(train_df.iloc[0]['tokens1'])
     print(train_df.iloc[0]['character_ids1'])
     print(len(train_df))
     print(len(valid_df))
-    print(len(matched_df))
-    print(len(mismatched_df))
+    print(len(test_df))
     # train_df = train_df[train_df['gold_label'] != '-']
     # valid_df = valid_df[valid_df['gold_label'] != '-']
     # matched_df = matched_df[matched_df['gold_label'] != '-']

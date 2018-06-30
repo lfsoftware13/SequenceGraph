@@ -70,8 +70,11 @@ class Glove300dWordEmbedding(WordEmbedding):
 
 
 class FastTextWordEmbedding(WordEmbedding):
-    def __init__(self):
-        super().__init__(FastText.load_fasttext_format(config.pretrained_fasttext_path))
+    def __init__(self, language='en'):
+        if language == 'en':
+            super().__init__(FastText.load_fasttext_format(config.pretrained_fasttext_path))
+        elif language == 'de':
+            super().__init__(FastText.load_fasttext_format(config.pretrained_fasttext_de_path))
         print("the fasttext model loaded")
 
 
