@@ -203,10 +203,11 @@ def train_and_evaluate(
 
         scheduler.step(train_valid_loss)
 
-        if best_valid_loss is None or train_valid_loss > best_valid_loss:
+        if best_valid_loss is None or train_valid_loss < best_valid_loss:
             best_valid_loss = train_valid_loss
             # best_test_loss = train_test_loss
             torch_util.save_model(model, save_path)
+        torch_util.save_model(model, save_path+str(epoch))
 
         print("train validation loss is:{}".format(train_valid_loss, ))
         for evaluator in valid_loss:
