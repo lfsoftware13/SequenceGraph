@@ -11,9 +11,10 @@ from torch.utils.data import Dataset
 import config
 from common import torch_util
 from common.character_embedding import CharacterEmbedding
+from common.feed_forward_block import MultiLayerFeedForwardLayer
 from common.input_embedding import InputEmbedding, InputPairEmbedding
 from common.problem_util import to_cuda
-from common.torch_util import spilt_heads, create_sequence_length_mask
+from common.torch_util import spilt_heads, create_sequence_length_mask, Attention
 from common.util import data_loader, show_process_map, PaddedList
 
 
@@ -245,15 +246,20 @@ class SelfAttentionPairModel(nn.Module):
     def __init__(self,
                  word_embedding: np.array,
                  character_number, character_embedding_dim=32, character_n_filters=200,
-                 character_kernel_size=5, character_padding=2, self_attention_layer=4):
+                 character_kernel_size=5, character_padding=2, self_attention_layer=4, n_classes=2):
         super().__init__()
         self.character_embedding = CharacterEmbedding(character_number, character_embedding_dim, character_n_filters,
                                                       character_kernel_size, character_padding)
         self.word_embedding = InputPairEmbedding(word_embedding, word_embed_dim=word_embedding.shape[1], )
-        self.self_attentions = nn.ModuleList([SelfAttentionEncoder(hidden_size=character_n_filters+word_embedding.shape[1], num_heads=2,
-                                                   normalize_type='layer') for _ in range(self_attention_layer)])
-
-        self.o = nn.Linear((character_n_filters+word_embedding.shape[1])*4, 1)
+        # self.self_attentions = nn.ModuleList([SelfAttentionEncoder(hidden_size=character_n_filters+word_embedding.shape[1], num_heads=2,
+        #                                                            normalize_type='layer') for _ in range(self_attention_layer)])
+        self.self_attentions = Attention(hidden_size=character_n_filters+word_embedding.shape[1])
+        self.ll = MultiLayerFeedForwardLayer(4, (character_n_filters+word_embedding.shape[1])*4, 200, 200, 0.1)
+        if n_classes == 2:
+            self.o = nn.Linear(200, 1)
+        else:
+            self.o = nn.Linear(200, n_classes)
+        self.n_classes = n_classes
 
     def forward(self, q1, q1_char, q2, q2_char):
         q1, q2 = self.word_embedding(q1, q2)
@@ -263,13 +269,19 @@ class SelfAttentionPairModel(nn.Module):
         q2 = torch.cat((q2, q2_char), dim=-1)
         del q1_char, q2_char
 
-        for self_atten in self.self_attentions:
-            q1 = self_atten(q1, None) + q1
-            q2 = self_atten(q2, None) + q2
+        # for self_atten in self.self_attentions:
+        #     q1 = self_atten(q1, None) + q1
+        #     q2 = self_atten(q2, None) + q2
+        q1, _, _ = self.self_attentions(q1, q1, )
+        q2, _, _ = self.self_attentions(q2, q2)
 
         q1_o, _ = torch.max(q1, dim=1)
         q2_o, _ = torch.max(q2, dim=1)
-        return self.o(torch.cat((q1_o, q2_o, q1_o+q2_o, torch.abs(q1_o-q2_o)), dim=-1)).squeeze(-1)
+        o = self.ll(torch.cat((q1_o, q2_o, q1_o+q2_o, torch.abs(q1_o-q2_o)), dim=-1))
+        if self.n_classes == 2:
+            return self.o(o).squeeze(-1)
+        else:
+            return self.o(o)
 
 
 class PreprocessWrapper(nn.Module):

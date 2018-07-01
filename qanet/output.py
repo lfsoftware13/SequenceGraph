@@ -12,7 +12,7 @@ class Output(nn.Module):
 
         self.W1 = nn.Linear(2*self.d, 1)
         self.W2 = nn.Linear(2*self.d, 1)
-        self.o1 = nn.Linear(2*self.d, 1)
+        self.o1 = nn.Linear(2*self.d, 3)
         # Initialize with Xavier
         nn.init.xavier_uniform_(self.W1.weight)
         nn.init.xavier_uniform_(self.W2.weight)
@@ -26,6 +26,6 @@ class Output(nn.Module):
         # p2 = self.W2(torch.cat((M0,M2), -1))
         p1_softmax = F.softmax(p1, dim=-1).unsqueeze(-1)
         t1_o = torch.sum(t1*p1_softmax, dim=1)
-        t1_o = self.o1(t1_o).squeeze()
+        t1_o = self.o1(t1_o)
 
         return t1_o, None
