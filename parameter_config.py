@@ -460,7 +460,7 @@ def snli_config2(is_debug, output_log=None):
         "model_dict": {
             "word_embedding": vocabulary.embedding_matrix,
             "n_classes": 3,
-            "hidden_size": 128*4,
+            "hidden_size": 400,
         },
         "pre_process_module_fn": PreprocessWrapper,
         "pre_process_module_dict": {

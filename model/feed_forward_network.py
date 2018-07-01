@@ -59,7 +59,7 @@ class FFN(nn.Module):
 class FFNWithCrossCompare(nn.Module):
     def __init__(self,
                  word_embedding: np.array,
-                 conv_layer=2,
+                 conv_layer=1,
                  hidden_size=300,
                  n_classes=3,
                  ):
@@ -74,7 +74,7 @@ class FFNWithCrossCompare(nn.Module):
             nn.Linear(embedding_dim, hidden_size),
             nn.ReLU()
         )
-        self.compare = NodeRelationPrediction(hidden_size, 2, )
+        self.compare = NodeRelationPrediction(hidden_size, 1, )
         self.output_conv = nn.Sequential(
             *[ConvolutionLayer(hidden_size, hidden_size,
                                kernel_size=7, padding=3,

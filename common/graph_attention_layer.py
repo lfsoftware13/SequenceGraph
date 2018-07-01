@@ -106,8 +106,8 @@ class NodeRelationPrediction(nn.Module):
         self._input_dim = input_dim
         self.structure_information_extracter = Highway(input_size=input_dim, n_layers=n_layer)
         self.symmetry = symmetry
-        self.compare_block = MultiLayerFeedForwardLayer(n_layer, 4*input_dim, input_dim,
-                                                        input_dim, dropout, activator=activator)
+        self.compare_block = MultiLayerFeedForwardLayer(n_layer, 2*input_dim, input_dim,
+                                                        input_dim, dropout, activator=nn.Sigmoid(), last_no_activate=True)
 
     def forward(self, n1, n2):
         batch_size = n1.shape[0]
@@ -117,7 +117,7 @@ class NodeRelationPrediction(nn.Module):
         n2 = self.structure_information_extracter(n2)
         n1 = torch_util.repeatRowsTensor(n1, n2_length)
         n2 = n2.repeat(1, n1_length, 1)
-        n = torch.cat([n1, n2, n1+n2, torch.abs(n1-n2) if self.symmetry else n1-n2], dim=2)
+        n = torch.cat([n1, n2,], dim=2)
         return self.compare_block(n).view(batch_size, n1_length, n2_length, -1)
 
 

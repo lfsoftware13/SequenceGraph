@@ -162,7 +162,7 @@ def train_and_evaluate(
         evaluate_object_list,
         ):
     optimizer = optimizer(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, **optimizer_dict)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3, verbose=True)
     if load_previous:
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
                                                 train_loss_function)
