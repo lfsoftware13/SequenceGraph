@@ -105,6 +105,7 @@ class SequenceGraphModelWithGraphAttention(nn.Module):
                  # use_sum_node=False,
                   character_embedding_dim=32, character_n_filters=200,
                  character_kernel_size=5, character_padding=2,
+                 n_classes=2,
                  ):
         super().__init__()
         embedding_dim = word_embedding.shape[1] * (2 if mixed else 1)
@@ -127,7 +128,11 @@ class SequenceGraphModelWithGraphAttention(nn.Module):
                                                                                   0.2,
                                                                                   leaky_alpha,
                                                                                   graph_attention_n_head)
-        self.output = nn.Linear(hidden_size*graph_attention_n_head, 1)
+        if n_classes == 2:
+            self.output = nn.Linear(hidden_size*graph_attention_n_head, 1)
+        else:
+            self.output = nn.Linear(hidden_size*graph_attention_n_head, n_classes)
+        self.n_classes = n_classes
         self._graph_itr = graph_itr
 
     def forward(self, sentences, sentences_char, fixed_graph):
@@ -156,7 +161,10 @@ class SequenceGraphModelWithGraphAttention(nn.Module):
         #     return self.output(node_representation[:, -1, :]).squeeze(-1)
         # else:
         o, _ = torch.max(node_representation, dim=1)
-        return self.output(o).squeeze(-1)
+        if self.n_classes == 2:
+            return self.output(o).squeeze(-1)
+        else:
+            return self.output(o)
 
 
 class PreprocessWrapper(nn.Module):

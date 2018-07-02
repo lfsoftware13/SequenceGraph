@@ -582,3 +582,48 @@ def snli_config4(is_debug, output_log=None):
         "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
         "epoch_ratio": 0.1,
     }
+
+
+def snli_config5(is_debug, output_log=None):
+    from model.sentence_pair_graph import PreprocessWrapper
+    from read_data.snli.read_snli_experiment_data import load_dict_data
+    from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+    train, valid, test = load_dict_data(debug=is_debug, )
+    vocabulary = load_snli_vocabulary("glove_300d")
+    character_vocabulary = load_snli_character_vocabulary(n_gram=1)
+    from model.sentence_pair_graph import SequenceGraphModelWithGraphAttention
+    return {
+        "model_fn": SequenceGraphModelWithGraphAttention,
+        "model_dict": {
+            "word_embedding": vocabulary.embedding_matrix,
+            "character_number": len(character_vocabulary.character_to_id_dict),
+            "mixed": True,
+            "character_embedding_dim": 600,
+            "character_n_filters": 200,
+            "character_kernel_size": 5,
+            "character_padding": 2,
+            "hidden_size": 128,
+            "graph_itr": 1,
+            "dynamic_graph_n_layer": 2,
+            "graph_attention_n_head": 6,
+            "leaky_alpha": 0.2,
+            "n_classes": 3,
+        },
+        "pre_process_module_fn": PreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": vocabulary.word_to_id(vocabulary.pad),
+            "character_pad_idx": character_vocabulary.character_to_id_dict[character_vocabulary.PAD],
+        },
+        "data": [train, valid, test],
+        "batch_size": 80,
+        "train_loss": nn.CrossEntropyLoss,
+        "clip_norm": None,
+        "name": "SequenceGraphModelWithGraphAttention_snli",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
+        "epcohes": 160,
+        "lr": 3e-3,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 0.1,
+    }
