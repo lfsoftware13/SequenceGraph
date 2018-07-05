@@ -29,10 +29,10 @@ class InputPairEmbedding(nn.Module):
 
 class InputEmbedding(nn.Module):
     def __init__(self, word_embeddings, word_embed_dim=300,
-                highway_n_layers=2, mixed=False):
+                highway_n_layers=2, mixed=False, trainable=False):
         super(InputEmbedding, self).__init__()
 
-        self.wordEmbedding = WordEmbedding(word_embeddings, mixed=mixed)
+        self.wordEmbedding = WordEmbedding(word_embeddings, mixed=mixed, trainable=trainable)
         highway_input_size = word_embed_dim * (1 + int(mixed))
         self.highway = Highway(input_size=highway_input_size,
                                n_layers=highway_n_layers)

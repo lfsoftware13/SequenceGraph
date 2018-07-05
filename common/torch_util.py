@@ -284,8 +284,9 @@ def spilt_heads(x, num_heads):
 
 def create_sequence_length_mask(token_length, max_len, gpu_index=None):
     idxes = torch.arange(0, max_len, out=torch.Tensor(max_len)).unsqueeze(0)  # some day, you'll be able to directly do this on cuda
-    if gpu_index is not None:
-        idxes = idxes.cuda(gpu_index)
+    # if gpu_index is not None:
+    #     idxes = idxes.cuda(gpu_index)
+    idxes = idxes.to(token_length.device)
     # mask = autograd.Variable((trans_to_cuda(idxes) < token_length.unsqueeze(1)).float())
     mask = (idxes < token_length.unsqueeze(1).float())
     return mask

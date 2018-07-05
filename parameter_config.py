@@ -2,9 +2,12 @@ from torch import optim, nn
 
 from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score, \
     SequenceBinaryClassExactMatch
+from common.opt import OpenAIAdam
 from common.problem_util import get_gpu_index
+from common.schedculer import LinearScheduler
 from common.torch_util import calculate_accuracy_of_code_completion
 from model.self_attention_model import SelfAttentionPairModel
+from model.sentence_pair_graph import GGNNGraphModel, TestModel
 
 from read_data.method_naming.load_vocabulary import load_summarization_method_name_vocabulary
 
@@ -570,17 +573,17 @@ def snli_config4(is_debug, output_log=None):
             "character_pad_idx": character_vocabulary.character_to_id_dict[character_vocabulary.PAD],
         },
         "data": [train, valid, test],
-        "batch_size": 800,
+        "batch_size": 8,
         "train_loss": nn.CrossEntropyLoss,
         "clip_norm": None,
-        "name": "self_attention_snli",
+        "name": "self_attention_snli_debug",
         "optimizer": optim.Adam,
         "need_pad": True,
         "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 3e-7, },
         "epcohes": 160,
-        "lr": 3e-3,
+        "lr": 3e-5,
         "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
-        "epoch_ratio": 0.1,
+        "epoch_ratio": 1,
     }
 
 
@@ -626,4 +629,117 @@ def snli_config5(is_debug, output_log=None):
         "lr": 3e-3,
         "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
         "epoch_ratio": 0.1,
+    }
+
+
+def snli_config6(is_debug, output_log=None):
+    from model.sentence_pair_graph import ConcatPreprocessWrapper
+    import numpy as np
+    from read_data.snli.read_snli_experiment_data import load_dict_data
+    from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+    train, valid, test = load_dict_data(debug=is_debug, )
+    vocabulary = load_snli_vocabulary("glove_300d")
+    # character_vocabulary = load_snli_character_vocabulary(n_gram=1)
+    delimeter_idx = len(vocabulary.id_to_word_dict)
+    summary_idx = len(vocabulary.id_to_word_dict) + 1
+    embedding_matrix = vocabulary.embedding_matrix
+    embedding_matrix = np.concatenate((embedding_matrix, np.random.randn(2, embedding_matrix.shape[1])), axis=0)
+    return {
+        "model_fn": GGNNGraphModel,
+        "model_dict": {
+            "word_embedding": embedding_matrix,
+            "max_length": 80,
+            "hidden_state_size": 756,
+            "n_classes": 3,
+        },
+        "pre_process_module_fn": ConcatPreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": vocabulary.word_to_id(vocabulary.pad),
+            "delimeter_idx": delimeter_idx,
+            "summary_node_idx": summary_idx,
+            "max_length": 80,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": nn.CrossEntropyLoss,
+        "clip_norm": 1,
+        "name": "GGNNGraphModel_snli",
+        "optimizer": OpenAIAdam,
+        "need_pad": True,
+        "optimizer_dict": {
+                           "schedule": 'warmup_linear',
+                           "warmup": 0.002,
+                           "t_total": (100//8)*300,
+                           "b1": 0.9,
+                           "b2": 0.999,
+                           "e": 1e-8,
+                           "l2": 0.01,
+                           "vector_l2": 'store_true',
+                           "max_grad_norm": 1},
+        "epcohes": 300,
+        "lr": 6.25e-5,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 1,
+        "scheduler_fn": None
+    }
+
+
+def snli_config7(is_debug, output_log=None):
+    from model.sentence_pair_graph import ConcatPreprocessWrapper
+    import numpy as np
+    from read_data.snli.read_snli_experiment_data import load_dict_data
+    from read_data.snli.load_snli_vocabulary import load_snli_vocabulary, load_snli_character_vocabulary
+    train, valid, test = load_dict_data(debug=is_debug, )
+    vocabulary = load_snli_vocabulary("glove_300d")
+    # character_vocabulary = load_snli_character_vocabulary(n_gram=1)
+    delimeter_idx = len(vocabulary.id_to_word_dict)
+    summary_idx = len(vocabulary.id_to_word_dict) + 1
+    embedding_matrix = vocabulary.embedding_matrix
+    embedding_matrix = np.concatenate((embedding_matrix, np.random.randn(2, embedding_matrix.shape[1])), axis=0)
+    from model.transformer_lm import dotdict
+    return {
+        "model_fn": TestModel,
+        "model_dict": {
+            "cfg": dotdict({
+                'n_embd': 768,
+                'n_head': 1,
+                'n_layer': 1,
+                'embd_pdrop': 0.1,
+                'attn_pdrop': 0.1,
+                'resid_pdrop': 0.1,
+                'afn': 'gelu',
+                'clf_pdrop': 0.1}),
+            "clf_token": summary_idx, "vocabulary_size": embedding_matrix.shape[0],
+            "n_ctx": 80 + 2
+        },
+        "pre_process_module_fn": ConcatPreprocessWrapper,
+        "pre_process_module_dict": {
+            "pad_idx": vocabulary.word_to_id(vocabulary.pad),
+            "delimeter_idx": delimeter_idx,
+            "summary_node_idx": summary_idx,
+            "max_length": 80,
+        },
+        "data": [train, valid, test],
+        "batch_size": 8,
+        "train_loss": nn.CrossEntropyLoss,
+        "clip_norm": 1,
+        "name": "GGNNGraphModel_snli",
+        "optimizer": optim.Adam,
+        "need_pad": True,
+        # "optimizer_dict": {
+        #                    "schedule": 'warmup_linear',
+        #                    "warmup": 0.002,
+        #                    "t_total": (100//8)*300,
+        #                    "b1": 0.9,
+        #                    "b2": 0.999,
+        #                    "e": 1e-8,
+        #                    "l2": 0.01,
+        #                    "vector_l2": 'store_true',
+        #                    "max_grad_norm": 1},
+        "optimizer_dict": {"betas": (0.9, 0.999), "weight_decay": 0.01, },
+        "epcohes": 300,
+        "lr": 6.25e-5,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index())],
+        "epoch_ratio": 1,
+        "scheduler_fn": None
     }

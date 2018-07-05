@@ -47,10 +47,11 @@ class WordPairEmbedding(nn.Module):
 
 
 class WordEmbedding(nn.Module):
-    def __init__(self, word_embeddings, mixed=False):
+    def __init__(self, word_embeddings, mixed=False, trainable=False):
         super().__init__()
         self.word_embedding = self._create_embedding(word_embeddings)
-        self.word_embedding.weight.requires_grad = False
+        if not trainable and not mixed:
+            self.word_embedding.weight.requires_grad = False
         if mixed:
             self._trainable_embedding = self._create_embedding(word_embeddings)
 
