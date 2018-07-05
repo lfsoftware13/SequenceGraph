@@ -334,11 +334,11 @@ class ConcatPreprocessWrapper(nn.Module):
         def to(x):
             return to_cuda(torch.LongTensor(x))
 
-        # return [torch.cat([to(PaddedList(s, fill_value=self._pad_idx, shape=[batch_size, self._max_length], )).unsqueeze(-1),
-        #                   to(np.repeat(self._position_range, batch_size, axis=0)).unsqueeze(-1)], dim=-1)]
-        return to(PaddedList(s, fill_value=self._pad_idx, shape=[batch_size, self._max_length],)), \
-               to(length), \
-               to(np.repeat(self._position_range, batch_size, axis=0))
+        return [torch.cat([to(PaddedList(s, fill_value=self._pad_idx, shape=[batch_size, self._max_length], )).unsqueeze(-1),
+                          to(np.repeat(self._position_range, batch_size, axis=0)).unsqueeze(-1)], dim=-1)]
+        # return to(PaddedList(s, fill_value=self._pad_idx, shape=[batch_size, self._max_length],)), \
+        #        to(length), \
+        #        to(np.repeat(self._position_range, batch_size, axis=0))
 
     def forward(self, batch_data):
         return self.m(*self._preprocess(batch_data))

@@ -74,7 +74,8 @@ def train(model, dataset, batch_size,
           clip_norm,
           epoch_ratio,
           evaluate_object_list,
-          desc):
+          desc,
+          label_preprocess_fn):
     total_loss = to_cuda(torch.Tensor([0]))
     steps = to_cuda(torch.Tensor([0]))
     # previous_char_max = 0
@@ -104,7 +105,7 @@ def train(model, dataset, batch_size,
             # log_probs.register_hook(create_hook_fn("log_probs"))
 
             # print("log_probs sizze:{}".format(log_probs.size()))
-            label = to_cuda(torch.LongTensor(batch_data['label']))
+            label = label_preprocess_fn(batch_data)
             loss = loss_function(log_probs, label)
 
             # loss.register_hook(create_hook_fn("loss"))
@@ -138,7 +139,8 @@ def train(model, dataset, batch_size,
     return evaluate_object_list, total_loss/steps
 
 
-def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List[Evaluator], train_loss_function, desc):
+def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List[Evaluator], train_loss_function, desc,
+             label_preprocess_fn):
     model.eval()
     for o in evaluate_object_list:
         o.clear_result()
@@ -148,7 +150,7 @@ def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List
         for batch_data in data_loader(valid_dataset, batch_size=batch_size, is_shuffle=False, drop_last=False):
             model.zero_grad()
             predict_logit = model.forward(batch_data)
-            target = to_cuda(torch.LongTensor(batch_data['label']))
+            target = label_preprocess_fn(batch_data)
             train_loss = train_loss_function(predict_logit, target)
             for evaluator in evaluate_object_list:
                 evaluator.add_result(predict_logit, target, batch_data=batch_data)
@@ -173,6 +175,7 @@ def train_and_evaluate(
         epoch_ratio,
         evaluate_object_list,
         scheduler_fn,
+        label_preprocess_fn,
         ):
     optimizer = optimizer(filter(lambda p: p.requires_grad, model.parameters()), lr=lr, **optimizer_dict)
     if scheduler_fn is not None:
@@ -181,7 +184,7 @@ def train_and_evaluate(
         scheduler = None
     if load_previous:
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
-                                                train_loss_function, "load_evaluate")
+                                                train_loss_function, "load_evaluate", label_preprocess_fn)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
         best_valid_loss = train_valid_loss
@@ -204,13 +207,15 @@ def train_and_evaluate(
     for epoch in range(epoches):
         evaluate_train_loss, train_loss = train(model, train_dataset, batch_size, train_loss_function, optimizer,
                                                 clip_norm, epoch_ratio,
-                                                evaluate_object_list, "train_epoch_{}".format(epoch))
+                                                evaluate_object_list, "train_epoch_{}".format(epoch),
+                                                label_preprocess_fn)
         print("epoch {}".format(epoch))
         print("train loss of {},".format(train_loss.item(), ))
         for evaluator in evaluate_train_loss:
             print(evaluator)
         valid_loss, train_valid_loss = evaluate(model, valid_dataset, batch_size, evaluate_object_list,
-                                                train_loss_function, "evaluate_epoch_{}".format(epoch))
+                                                train_loss_function, "evaluate_epoch_{}".format(epoch),
+                                                label_preprocess_fn)
         # test_loss, train_test_loss = evaluate(model, test_dataset, batch_size, evaluate_loss_function,
         #                                       train_loss_function)
 
@@ -270,6 +275,7 @@ if __name__ == '__main__':
     optimizer_dict = p_config.get("optimizer_dict", dict())
     epoch_ratio = p_config.get("epoch_ratio", 0.5)
     evaluate_object_list = p_config.get("evaluate_object_list")
+    label_preprocess_fn = p_config.get("label_preprocess", lambda x: to_cuda(torch.LongTensor(x['label'])))
     scheduler_fn = p_config.get("scheduler_fn", lambda x: torch.optim.lr_scheduler.ReduceLROnPlateau(x, 'min', patience=3, verbose=True))
     save_root_path = os.path.join(config.DATA_PATH, p_config.get("name"))
     util.make_dir(save_root_path)
@@ -293,7 +299,7 @@ if __name__ == '__main__':
     print("The size of test data: {}".format(len(test_data)))
     train_and_evaluate(model, batch_size, train_data, val_data, test_data, epoches, lr, load_previous, model_path,
                        train_loss_fn, clip_norm, optimizer, optimizer_dict, just_evaluate, epoch_ratio,
-                       evaluate_object_list, scheduler_fn)
+                       evaluate_object_list, scheduler_fn, label_preprocess_fn)
 
     test_loss, train_test_loss = evaluate(model, test_data, batch_size, evaluate_object_list,
                                           train_loss_fn, "test_evaluate")

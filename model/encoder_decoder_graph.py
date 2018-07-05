@@ -15,7 +15,8 @@ from common.character_embedding import CharacterEmbedding
 from common.context_query_attention import CosineCrossAttention
 from common.input_embedding import WordCharInputEmbedding, RandomInitialInputEmbedding
 from common.problem_util import to_cuda, get_gpu_index
-from common.util import create_sequence_node_link
+from common.util import create_sequence_node_link, PaddedList
+from model.transformer_lm import TransformerModel
 
 
 class EncoderDecoderModel(nn.Module):
@@ -151,3 +152,56 @@ class PreprocessWrapper(nn.Module):
 
         adj_matrix = to_cuda(torch.FloatTensor(np.stack(adj_matrix, axis=0)))
         return encoder_sequence, initial_decoder_sequence, adj_matrix
+
+
+class SequenceEncoderDecoderModel(nn.Module):
+    def __init__(self,
+                 cfg,
+                 vocab,
+                 n_ctx):
+        super().__init__()
+        self.transformer_model = TransformerModel(cfg, vocab=vocab, n_ctx=n_ctx)
+        self.o = nn.Linear(cfg['n_embd'], vocab)
+
+    def forward(self, x, output_mask):
+        x = self.transformer_model(x)
+        return self.o(x), output_mask
+
+
+def sequence_encoder_decoder_loss():
+    Loss = nn.CrossEntropyLoss()
+    def loss(log_probs, target):
+        output_mask = log_probs[1]
+        log_probs = log_probs[0]
+        return Loss(torch.masked_select(log_probs, output_mask),
+                    torch.cat(target))
+    return loss
+
+
+class SequencePreprocesser(nn.Module):
+    def __init__(self,
+                 m,
+                 hole_idx,
+                 begin_idx,
+                 delimeter_idx,
+                 max_length,
+                 ):
+        super().__init__()
+        self.hole_idx = hole_idx
+        self.begin_idx = begin_idx
+        self.delimeter_idx = delimeter_idx
+        self.max_length = max_length
+        self.m = m
+
+    def _preprocess(self, x):
+        def to(x):
+            return to_cuda(torch.LongTensor(x))
+        x = x['x']
+        s = [[self.begin_idx] + t + [self.delimeter_idx] for t in x]
+        batch_size = len(x)
+        output_mask = [[0]*(len(t)+2)+[1]*(len(t)+1) for t in x]
+        return [to(PaddedList(s, fill_value=self.hole_idx, shape=[batch_size, self.max_length],),),
+                to(PaddedList(output_mask, fill_value=0, shape=[batch_size, self.max_length]))]
+
+    def forward(self, x):
+        return self.m(*self._preprocess(x))
