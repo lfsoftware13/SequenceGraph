@@ -302,7 +302,7 @@ if __name__ == '__main__':
                        evaluate_object_list, scheduler_fn, label_preprocess_fn)
 
     test_loss, train_test_loss = evaluate(model, test_data, batch_size, evaluate_object_list,
-                                          train_loss_fn, "test_evaluate")
+                                          train_loss_fn, "test_evaluate", label_preprocess_fn)
     print("train_test_loss is {}".format(train_test_loss.item(),))
     for o in  test_loss:
         print(o)

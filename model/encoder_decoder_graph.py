@@ -171,9 +171,11 @@ class SequenceEncoderDecoderModel(nn.Module):
 def sequence_encoder_decoder_loss():
     Loss = nn.CrossEntropyLoss()
     def loss(log_probs, target):
-        output_mask = log_probs[1]
+        output_mask = log_probs[1].unsqueeze(-1).byte()
         log_probs = log_probs[0]
-        return Loss(torch.masked_select(log_probs, output_mask),
+        classes = log_probs.shape[-1]
+        log = torch.masked_select(log_probs, output_mask).view(-1, classes)
+        return Loss(log,
                     torch.cat(target))
     return loss
 
@@ -185,6 +187,7 @@ class SequencePreprocesser(nn.Module):
                  begin_idx,
                  delimeter_idx,
                  max_length,
+                 position_embedding_base,
                  ):
         super().__init__()
         self.hole_idx = hole_idx
@@ -192,6 +195,7 @@ class SequencePreprocesser(nn.Module):
         self.delimeter_idx = delimeter_idx
         self.max_length = max_length
         self.m = m
+        self._position_range = np.arange(max_length).reshape(-1, max_length) + position_embedding_base
 
     def _preprocess(self, x):
         def to(x):
@@ -200,7 +204,8 @@ class SequencePreprocesser(nn.Module):
         s = [[self.begin_idx] + t + [self.delimeter_idx] for t in x]
         batch_size = len(x)
         output_mask = [[0]*(len(t)+2)+[1]*(len(t)+1) for t in x]
-        return [to(PaddedList(s, fill_value=self.hole_idx, shape=[batch_size, self.max_length],),),
+        return [torch.cat([to(PaddedList(s, fill_value=self.hole_idx, shape=[batch_size, self.max_length],),).unsqueeze(-1),
+                           to(np.repeat(self._position_range, batch_size, axis=0)).unsqueeze(-1)], dim=-1),
                 to(PaddedList(output_mask, fill_value=0, shape=[batch_size, self.max_length]))]
 
     def forward(self, x):

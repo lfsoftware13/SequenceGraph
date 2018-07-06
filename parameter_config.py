@@ -1,3 +1,5 @@
+import torch
+
 from torch import optim, nn
 
 from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score, \
@@ -771,7 +773,7 @@ def sequence_transform_data_config1(is_debug, output_log=None):
                 'resid_pdrop': 0.1,
                 'afn': 'gelu',
                 'clf_pdrop': 0.1}),
-            "vocab": 15,
+            "vocab": 15 + max_length*2+3,
             "n_ctx": max_length*2+3
         },
         "pre_process_module_fn": SequencePreprocesser,
@@ -780,19 +782,20 @@ def sequence_transform_data_config1(is_debug, output_log=None):
             "begin_idx":  begin_index,
             "delimeter_idx": delimiter_index,
             "max_length": max_length*2+3,
+            "position_embedding_base": 15,
         },
         "data": [train, valid, test],
-        "label_preprocess": lambda x: [to_cuda(t+[end_index]) for t in x['y']],
-        "batch_size": 8,
+        "label_preprocess": lambda x: [to_cuda(torch.LongTensor(t+[end_index])) for t in x['y']],
+        "batch_size": 800,
         "train_loss": sequence_encoder_decoder_loss,
         "clip_norm": 1,
-        "name": "GGNNGraphModel_snli",
+        "name": "Transformer_seq_to_seq_model",
         "optimizer": OpenAIAdam,
         "need_pad": True,
         "optimizer_dict": {
                            "schedule": 'warmup_linear',
                            "warmup": 0.002,
-                           "t_total": (100//8)*300,
+                           "t_total": (80000//800)*300,
                            "b1": 0.9,
                            "b2": 0.999,
                            "e": 1e-8,
@@ -800,7 +803,7 @@ def sequence_transform_data_config1(is_debug, output_log=None):
                            "vector_l2": 'store_true',
                            "max_grad_norm": 1},
         "epcohes": 300,
-        "lr": 6.25e-5,
+        "lr": 6.25e-4,
         "evaluate_object_list": [],
         "epoch_ratio": 1,
         "scheduler_fn": None
