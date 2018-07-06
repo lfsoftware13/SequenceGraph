@@ -3,11 +3,12 @@ import torch
 from torch import optim, nn
 
 from common.evaluate_util import SequenceExactMatch, SequenceOutputIDToWord, SequenceF1Score, \
-    SequenceBinaryClassExactMatch
+    SequenceBinaryClassExactMatch, SequenceMultiLabelExactMatch
 from common.opt import OpenAIAdam
 from common.problem_util import get_gpu_index, to_cuda
 from common.schedculer import LinearScheduler
 from common.torch_util import calculate_accuracy_of_code_completion
+from common.util import PaddedList
 from model.self_attention_model import SelfAttentionPairModel
 from model.sentence_pair_graph import GGNNGraphModel, TestModel
 
@@ -21,8 +22,8 @@ def em_loss_fn(ignore_token=None,):
     return loss
 
 
-def NCE_train_loss():
-    Loss = nn.CrossEntropyLoss()
+def NCE_train_loss(ignore_index=-100):
+    Loss = nn.CrossEntropyLoss(ignore_index=ignore_index)
 
     def loss(log_probs, target):
         return Loss(log_probs.permute(0, 2, 1), target)
@@ -750,8 +751,8 @@ def snli_config7(is_debug, output_log=None):
 def sequence_transform_data_config1(is_debug, output_log=None):
     from model.encoder_decoder_graph import SequenceEncoderDecoderModel
     import numpy as np
-    from read_data.sequencec_transform_data.load_data import load_generated_data
-    train, valid, test = load_generated_data(is_debug)
+    from read_data.sequencec_transform_data.load_data import load_generated_random_target_data, RandomTargetDataSet
+    train, valid, test = load_generated_random_target_data(is_debug)
     max_index = 10
     max_length = 20
     begin_index = 11
@@ -789,22 +790,92 @@ def sequence_transform_data_config1(is_debug, output_log=None):
         "batch_size": 800,
         "train_loss": sequence_encoder_decoder_loss,
         "clip_norm": 1,
-        "name": "Transformer_seq_to_seq_model",
+        "name": "Transformer_seq_to_seq_model_use_random_target",
         "optimizer": OpenAIAdam,
         "need_pad": True,
         "optimizer_dict": {
                            "schedule": 'warmup_linear',
                            "warmup": 0.002,
-                           "t_total": (80000//800)*300,
+                           "t_total": (80000//800)*80,
                            "b1": 0.9,
                            "b2": 0.999,
                            "e": 1e-8,
                            "l2": 0.01,
                            "vector_l2": 'store_true',
                            "max_grad_norm": 1},
-        "epcohes": 300,
+        "epcohes": 80,
         "lr": 6.25e-4,
         "evaluate_object_list": [],
+        "epoch_ratio": 1,
+        "scheduler_fn": None
+    }
+
+
+def sequence_transform_data_config2(is_debug, output_log=None):
+    from model.encoder_decoder_graph import SequenceEncoderDecoderModelUseEncodePad
+    import numpy as np
+    from read_data.sequencec_transform_data.load_data import load_generated_random_target_data
+    train, valid, test = load_generated_random_target_data(is_debug)
+    valid.train = False
+    test.train = False
+    max_index = 10
+    max_length = 20
+    begin_index = 11
+    end_index = 12
+    delimiter_index = 13
+    hole_index = 14
+    pad_index = 15
+    for t in [train, valid, test]:
+        t.end = [end_index]
+    from model.transformer_lm import dotdict
+    from model.encoder_decoder_graph import SequencePreprocesserWithInputPad
+    return {
+        "model_fn": SequenceEncoderDecoderModelUseEncodePad,
+        "model_dict": {
+            "cfg": dotdict({
+                'n_embd': 768,
+                'n_head': 1,
+                'n_layer': 1,
+                'embd_pdrop': 0.1,
+                'attn_pdrop': 0.1,
+                'resid_pdrop': 0.1,
+                'afn': 'gelu',
+                'clf_pdrop': 0.1}),
+            "vocab": 16 + max_length*2+4,
+            "n_ctx": max_length*2+4,
+            "encoder_length": max_length+2,
+        },
+        "pre_process_module_fn": SequencePreprocesserWithInputPad,
+        "pre_process_module_dict": {
+            "hole_idx": hole_index,
+            "begin_idx":  begin_index,
+            "delimeter_idx": delimiter_index,
+            "pad_idx": pad_index,
+            "max_length": max_length+2,
+            "position_embedding_base": 16,
+        },
+        "data": [train, valid, test],
+        "label_preprocess": lambda x: to_cuda(torch.LongTensor([PaddedList(t, fill_value=pad_index, shape=[max_length+1]) for t in x['y']])),
+        "batch_size": 800,
+        "train_loss": lambda: NCE_train_loss(ignore_index=pad_index),
+        "clip_norm": 1,
+        "name": "Transformer_seq_to_seq_model_use_random_target_use_encoder_pad",
+        "optimizer": OpenAIAdam,
+        "need_pad": True,
+        "optimizer_dict": {
+                           "schedule": 'warmup_linear',
+                           "warmup": 0.002,
+                           "t_total": (80000//800)*80,
+                           "b1": 0.9,
+                           "b2": 0.999,
+                           "e": 1e-8,
+                           "l2": 0.01,
+                           "vector_l2": 'store_true',
+                           "max_grad_norm": 1},
+        "epcohes": 80,
+        "lr": 6.25e-4,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index(), ignore_token=pad_index),
+                                 SequenceOutputIDToWord(vocab=None, file_path=output_log, ignore_token=pad_index)],
         "epoch_ratio": 1,
         "scheduler_fn": None
     }

@@ -23,6 +23,7 @@ from common.evaluate_util import Evaluator
 from common.problem_util import to_cuda
 from common.util import data_loader
 from read_data.data_set import OriDataSet
+from read_data.sequencec_transform_data.load_data import RandomTargetDataSet
 
 
 def get_model(model_fn, parameter, pre_process_module_fn, pre_process_module_parameter, path, load_previous=False, parallel=False, gpu_index=None):
@@ -83,7 +84,7 @@ def train(model, dataset, batch_size,
     for o in evaluate_object_list:
         o.clear_result()
     model.train()
-    with tqdm(total=len(dataset)//batch_size, desc=desc) as pbar:
+    with tqdm(total=len(dataset)//batch_size, desc=desc, leave=False) as pbar:
         for batch_data in data_loader(dataset, batch_size=batch_size, is_shuffle=True, drop_last=True, epoch_ratio=epoch_ratio):
             # print(batch_data['terminal_mask'])
             # print('batch_data size: ', len(batch_data['terminal_mask'][0]), len(batch_data['terminal_mask'][0][0]))
@@ -146,7 +147,7 @@ def evaluate(model, valid_dataset, batch_size, evaluate_object_list: typing.List
         o.clear_result()
     train_total_loss = to_cuda(torch.Tensor([0]))
     steps = to_cuda(torch.Tensor([0]))
-    with tqdm(total=math.ceil(len(valid_dataset)/batch_size)) as pbar:
+    with tqdm(total=math.ceil(len(valid_dataset)/batch_size), leave=False) as pbar:
         for batch_data in data_loader(valid_dataset, batch_size=batch_size, is_shuffle=False, drop_last=False):
             model.zero_grad()
             predict_logit = model.forward(batch_data)

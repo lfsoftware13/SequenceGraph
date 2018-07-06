@@ -72,7 +72,7 @@ class SequenceExactMatch(Evaluator):
             target_mask = torch.ne(target, ignore_token)
             not_equal_result = not_equal_result & target_mask
         batch_error_count = not_equal_result
-        for i in range(len(not_equal_result.shape)-1):
+        for i in range(len(not_equal_result.shape) - 1):
             batch_error_count = torch.sum(batch_error_count, dim=-1)
 
         # [batch]
@@ -89,6 +89,88 @@ class SequenceExactMatch(Evaluator):
 
     def __str__(self):
         return ' SequenceExactMatch top 1: ' + str(self.get_result())
+
+    def __repr__(self):
+        return self.__str__()
+
+
+class SequenceMultiLabelExactMatch(Evaluator):
+
+    def __init__(self, rank=1, ignore_token=None, gpu_index=None):
+        self.rank = rank
+        self.batch_count = 0
+        self.match_count = 0
+        self.ignore_token = ignore_token
+        self.gpu_index = gpu_index
+
+    def clear_result(self):
+        self.batch_count = 0
+        self.match_count = 0
+
+    def add_result(self, log_probs, target, ignore_token=None, gpu_index=None, batch_data=None):
+        """
+
+        :param log_probs: [batch, ..., vocab_size]
+        :param target: [batch, ...], LongTensor, padded with target token. target.shape == log_probs.shape[:-1]
+        :param ignore_token: optional, you can choose special ignore token and gpu index for one batch.
+                            or use global value when ignore token and gpu_index is None
+        :param gpu_index:
+        :return:
+        """
+        if ignore_token is None:
+            ignore_token = self.ignore_token
+        if gpu_index is None:
+            gpu_index = self.gpu_index
+
+        if isinstance(target, list):
+            target = torch.LongTensor(target)
+            if gpu_index is not None:
+                target = target.cuda(gpu_index)
+
+        if gpu_index is None:
+            log_probs = log_probs.cpu()
+            target = target.cpu()
+
+        # expand log_probs to multi label
+        # [batch * multi, ...] <- [batch, multi, ...] <- [batch, 1, ...] <- [batch, ...]
+        label_multi_size = target.shape[1]
+        log_probs_shape = list(log_probs.shape)
+        expanded_log_probs = torch.unsqueeze(log_probs, dim=1).expand(-1, label_multi_size,
+                                                                      *[-1 for i in
+                                                                        range(len(log_probs_shape) - 1)])
+        multi_expanded_log_probs = expanded_log_probs.view(-1, *log_probs_shape[1:])
+
+        # [batch * multi_type, ...] <- [batch, multi_type, ...]
+        target = target.view(-1, *list(target.shape)[2:])
+
+        _, top1_id = torch.topk(multi_expanded_log_probs, k=1, dim=-1)
+        top1_id = torch.squeeze(top1_id, dim=-1)
+
+        not_equal_result = torch.ne(top1_id, target)
+
+        if ignore_token is not None:
+            target_mask = torch.ne(target, ignore_token)
+            not_equal_result = not_equal_result & target_mask
+        batch_error_count = not_equal_result
+        for i in range(len(not_equal_result.shape) - 1):
+            batch_error_count = torch.sum(batch_error_count, dim=-1)
+
+        # [batch]
+        batch_result = torch.eq(batch_error_count, 0)
+        batch_match_count = torch.sum(batch_result).data.item()
+
+        batch_size = log_probs.shape[0]
+        self.batch_count += batch_size
+        self.match_count += batch_match_count
+        return batch_match_count / batch_size
+
+    def get_result(self):
+        if self.batch_count == 0:
+            return 0
+        return self.match_count / self.batch_count
+
+    def __str__(self):
+        return ' SequenceMultiLabelExactMatch top 1: ' + str(self.get_result())
 
     def __repr__(self):
         return self.__str__()
@@ -151,7 +233,7 @@ class SequenceF1Score(Evaluator):
         self.tp_count += batch_tp_count
         self.predict_y += batch_predict_y
         self.actual_y += batch_actual_y
-        precision = float(batch_tp_count ) / float(batch_predict_y)
+        precision = float(batch_tp_count) / float(batch_predict_y)
         recall = float(batch_tp_count) / float(batch_actual_y)
         if precision + recall > 0:
             f1 = 2 * precision * recall / (precision + recall)
@@ -162,9 +244,10 @@ class SequenceF1Score(Evaluator):
     def filter_token_ids(self, token_ids, end, unk):
         def filter_special_token(token_ids, val):
             return list(filter(lambda x: x != val, token_ids))
+
         try:
             end_position = token_ids.index(end)
-            token_ids = token_ids[:end_position+1]
+            token_ids = token_ids[:end_position + 1]
         except ValueError as e:
             end_position = None
         token_ids = filter_special_token(token_ids, unk)
@@ -216,6 +299,9 @@ class SequenceOutputIDToWord(Evaluator):
             target = target.cpu()
             target = target.tolist()
 
+        if ignore_token is None:
+            ignore_token = self.ignore_token
+
         log_probs = log_probs.cpu()
         _, top_ids = torch.max(log_probs, dim=-1)
         top_ids = top_ids.tolist()
@@ -223,14 +309,25 @@ class SequenceOutputIDToWord(Evaluator):
         input_text = batch_data["text"]
 
         for one_input, one_top_id, one_target in zip(input_text, top_ids, target):
-            predict_token = self.convert_one_token_ids_to_code(one_top_id, self.vocab.id_to_word)
-            target_token = self.convert_one_token_ids_to_code(one_target, self.vocab.id_to_word)
+            if ignore_token is not None:
+                one_top_id, one_target = list(zip(*list(filter(lambda x: x[1] != ignore_token, zip(one_top_id, one_target)))))
+                # one_top_id = list(filter(lambda x: x != ignore_token, one_top_id))
+                # one_target = list(filter(lambda x: x != ignore_token, one_target))
+            if self.vocab is not None:
+                predict_token = self.convert_one_token_ids_to_code(one_top_id, self.vocab.id_to_word)
+                target_token = self.convert_one_token_ids_to_code(one_target, self.vocab.id_to_word)
+            else:
+                one_top_id = [str(o) for o in one_top_id]
+                one_target = [str(o) for o in one_target]
+                predict_token = ', '.join(one_top_id)
+                target_token = ', '.join(one_target)
             self.save_to_file(one_input, predict_token, target_token)
 
     def save_to_file(self, input_token=None, predict_token=None, target_token=None):
         if self.file_path is not None:
             with open(self.file_path, 'a') as f:
-                f.write('---------------------------------------- one record ----------------------------------------\n')
+                f.write(
+                    '---------------------------------------- one record ----------------------------------------\n')
                 if input_token is not None:
                     f.write('input: \n')
                     f.write(str(input_token) + '\n')
@@ -248,7 +345,7 @@ class SequenceOutputIDToWord(Evaluator):
 
         try:
             end_position = token_ids.index(end)
-            token_ids = token_ids[:end_position+1]
+            token_ids = token_ids[:end_position + 1]
         except ValueError as e:
             end_position = None
         # token_ids = filter_special_token(token_ids, start)
@@ -354,7 +451,7 @@ class SequenceBinaryClassExactMatch(Evaluator):
             target_mask = torch.ne(target, ignore_token)
             not_equal_result = not_equal_result & target_mask
         batch_error_count = not_equal_result
-        for i in range(len(not_equal_result.shape)-1):
+        for i in range(len(not_equal_result.shape) - 1):
             batch_error_count = torch.sum(batch_error_count, dim=-1)
 
         # [batch]

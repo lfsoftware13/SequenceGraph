@@ -210,3 +210,59 @@ class SequencePreprocesser(nn.Module):
 
     def forward(self, x):
         return self.m(*self._preprocess(x))
+
+
+class SequenceEncoderDecoderModelUseEncodePad(nn.Module):
+    def __init__(self,
+                 cfg,
+                 vocab,
+                 n_ctx,
+                 encoder_length):
+        super().__init__()
+        self.transformer_model = TransformerModel(cfg, vocab=vocab, n_ctx=n_ctx)
+        self.o = nn.Linear(cfg['n_embd'], vocab)
+        self.encoder_length = encoder_length
+
+    def forward(self, x,):
+        x = self.transformer_model(x)
+        return self.o(x[:, self.encoder_length+1:, :])
+
+
+class SequencePreprocesserWithInputPad(nn.Module):
+    def __init__(self,
+                 m,
+                 hole_idx,
+                 begin_idx,
+                 delimeter_idx,
+                 max_length,
+                 pad_idx,
+                 position_embedding_base,
+                 ):
+        super().__init__()
+        self.hole_idx = hole_idx
+        self.begin_idx = begin_idx
+        self.delimeter_idx = delimeter_idx
+        self.max_length = max_length
+        self.m = m
+        self.pad_idx = pad_idx
+        self._position_range = np.arange(max_length*2).reshape(-1, 2*max_length) + position_embedding_base
+
+    def _preprocess(self, x):
+        def to(x):
+            return to_cuda(torch.LongTensor(x))
+        x = x['x']
+        s = [[self.begin_idx] + t for t in x]
+        batch_size = len(x)
+        content_seq = torch.cat(
+                (to(PaddedList(s, fill_value=self.pad_idx, shape=[batch_size, self.max_length], ), ),
+                 to(PaddedList(np.repeat(np.array([self.delimeter_idx]).reshape(1, 1), batch_size, axis=0),
+                               fill_value=self.hole_idx, shape=[batch_size, self.max_length]))),
+                dim=1).unsqueeze(-1)
+        position_seq = to(np.repeat(self._position_range, batch_size, axis=0)).unsqueeze(-1)
+        return [torch.cat(
+            [content_seq,
+             position_seq], dim=-1),
+        ]
+
+    def forward(self, x):
+        return self.m(*self._preprocess(x))

@@ -83,14 +83,28 @@ class RandomTargetDataSet(Dataset):
     def __init__(self, source_data: typing.List[typing.List]):
         super().__init__()
         self._source_data = source_data
+        self.train = True
+        self.end = []
 
     def __getitem__(self, index):
-        x = self._source_data[index]
-        y = create_target(x)[0]
-        return {'x': x, 'y': y}
+        if self.train:
+            x = self._source_data[index]
+            y = create_target(x)[0] + self.end
+        else:
+            x = self._source_data[index//3]
+            y = [transform1, transform2, transform3][index%3](x)
+        return {'x': x, 'y': y, "text": x}
 
     def __len__(self):
-        return len(self._source_data)
+        if self.train:
+            return len(self._source_data)
+        else:
+            return len(self._source_data) * 3
+
+    def __setstate__(self, state):
+        self._source_data = state['_source_data']
+        self.train = True
+        self.end = []
 
 
 @disk_cache(basename='sequence_transform_data.load_generated_random_target_data', directory=CACHE_DATA_PATH)
@@ -134,7 +148,8 @@ if __name__ == '__main__':
         print("create target on the sequence:{}".format(create_target(s)))
     print(generate_data(10, 10, 5, 10))
     # df = generate_data(10, 20, 10, )
-    df = generate_source_data(10, 20, 10, )
-    util.make_dir(config.sequence_data_path)
-    df.to_pickle(os.path.join(config.sequence_data_path, 'source_sequence_data.pkl'))
+    # df = generate_source_data(10, 20, 10, )
+    # util.make_dir(config.sequence_data_path)
+    # df.to_pickle(os.path.join(config.sequence_data_path, 'source_sequence_data.pkl'))
     # train, valid, test = load_generated_data()
+    load_generated_random_target_data(False)
