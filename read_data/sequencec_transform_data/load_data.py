@@ -92,7 +92,7 @@ class RandomTargetDataSet(Dataset):
             y = create_target(x)[0] + self.end
         else:
             x = self._source_data[index//3]
-            y = [transform1, transform2, transform3][index%3](x)
+            y = [transform1, transform2, transform3][index % 3](x) + self.end
         return {'x': x, 'y': y, "text": x}
 
     def __len__(self):

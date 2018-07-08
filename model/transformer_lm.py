@@ -146,19 +146,41 @@ class Block(nn.Module):
         return h
 
 
+class PositionEmbedding(nn.Module):
+
+    def __init__(self, embedding, vocabulary_size):
+        super().__init__()
+        self.embed = nn.Embedding(vocabulary_size, embedding)
+        nn.init.normal_(self.embed.weight, std=0.02)
+
+    def forward(self, x):
+        x = x.view(-1, x.size(-2), x.size(-1))
+        e = self.embed(x)
+        h = e.sum(dim=2)
+        return h
+
+
+class Transformer(nn.Module):
+    def __init__(self, cfg, n_ctx=512):
+        super().__init__()
+        block = Block(n_ctx, cfg, scale=True)
+        self.h = nn.ModuleList([copy.deepcopy(block) for _ in range(cfg.n_layer)])
+
+    def forward(self, h):
+        for block in self.h:
+            h = block(h)
+        return h
+
+
 class TransformerModel(nn.Module):
     """ Transformer model """
 
-    def __init__(self, cfg, vocab=40990, n_ctx=512):
+    def __init__(self, cfg, vocab=40990, n_ctx=512,):
         super(TransformerModel, self).__init__()
         self.vocab = vocab
         self.embed = nn.Embedding(vocab, cfg.n_embd)
-        self.drop = nn.Dropout(cfg.embd_pdrop)
         block = Block(n_ctx, cfg, scale=True)
         self.h = nn.ModuleList([copy.deepcopy(block) for _ in range(cfg.n_layer)])
-        self.decoder = nn.Linear(cfg.n_embd, vocab, bias=False)
-        self.decoder.weight = self.embed.weight  # Tied weights
-        self.clf_dropout = nn.Dropout2d(cfg.clf_pdrop)  # To reproduce the noise_shape parameter of TF implementation
 
         nn.init.normal_(self.embed.weight, std=0.02)
 

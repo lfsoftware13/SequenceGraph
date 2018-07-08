@@ -13,10 +13,11 @@ import numpy as np
 from common import torch_util, graph_attention_layer
 from common.character_embedding import CharacterEmbedding
 from common.context_query_attention import CosineCrossAttention
+from common.feed_forward_block import FeedForwardLayer
 from common.input_embedding import WordCharInputEmbedding, RandomInitialInputEmbedding
 from common.problem_util import to_cuda, get_gpu_index
 from common.util import create_sequence_node_link, PaddedList
-from model.transformer_lm import TransformerModel
+from model.transformer_lm import TransformerModel, gelu, Transformer, PositionEmbedding
 
 
 class EncoderDecoderModel(nn.Module):
@@ -263,6 +264,119 @@ class SequencePreprocesserWithInputPad(nn.Module):
             [content_seq,
              position_seq], dim=-1),
         ]
+
+    def forward(self, x):
+        return self.m(*self._preprocess(x))
+
+
+def extract_state(x, x_state, state_idx):
+    """
+    :param x: [batch, seq, 2]
+    :param x_state: [batch, seq, dim]
+    :param state_idx: int
+    :return:
+    """
+    dim = x_state.shape[2]
+    idx = x[:, :, 0].contiguous().view(-1)
+    x_state = x_state.view(-1, dim)
+    return x_state[idx == state_idx, :]
+
+
+class DecoderInitialState(nn.Module):
+    def __init__(self,
+                 cfg,
+                 vocab,
+                 n_ctx,
+                 decoder_init_idx,
+                 ):
+        super().__init__()
+        self.embedding_dim = cfg.n_embd
+        self.decoder_initial_fill_transform = TransformerModel(cfg, vocab=vocab, n_ctx=n_ctx)
+        self.embedding = self.decoder_initial_fill_transform.embed
+        self.decoder_init_idx = decoder_init_idx
+        self.decoder_init_state_transform = FeedForwardLayer(self.embedding_dim, self.embedding_dim, 0.1, gelu)
+        self.initial_state = FeedForwardLayer(self.embedding_dim*2, self.embedding_dim, 0.1, gelu)
+
+    def forward(self, init_state_x, y_position):
+        """
+        :param init_state_x: [batch, max_encoder_seq+1, 2]
+        :param y_position: [batch, max_decoder_seq]
+        :return:
+        """
+        decoder_initial_state = self.decoder_initial_fill_transform(init_state_x)
+        decoder_initial_state = extract_state(init_state_x, decoder_initial_state, self.decoder_init_idx)
+        decoder_initial_state = self.decoder_init_state_transform(decoder_initial_state)
+        # [batch, embedding]
+        y_position = self.embedding(y_position)
+        # [batch, seq, dim]
+        decoder_initial_state = decoder_initial_state.unsqueeze(1).expand(-1, y_position.shape[1], -1)
+        decoder_initial_state = torch.cat((decoder_initial_state, y_position), dim=-1)
+        return self.initial_state(decoder_initial_state)
+
+
+class SEDWithInitialState(nn.Module):
+    def __init__(self,
+                 cfg,
+                 vocab,
+                 n_source_ctx,
+                 n_ctx,
+                 decoder_init_idx,
+                 ):
+        super().__init__()
+        self.initial_state = DecoderInitialState(cfg, vocab, n_source_ctx+1, decoder_init_idx)
+        self.decoder = Transformer(cfg, n_ctx=n_ctx)
+        self.position_embedding = PositionEmbedding(cfg.n_embd, vocab)
+        self.o = nn.Linear(cfg.n_embd, vocab)
+
+    def forward(self, init_state_x, x, y_position):
+        y_initial_state = self.initial_state(init_state_x, y_position)
+        x = self.position_embedding(x)
+        y = self.position_embedding.embed(y_position) + y_initial_state
+        h = torch.cat((x, y), dim=1)
+        h = self.decoder(h)
+        return self.o(h[:, x.shape[1]:, :])
+
+
+class SEDWithInitialStatePreproceser(nn.Module):
+    def __init__(self,
+                 m,
+                 begin_idx,
+                 delimeter_idx,
+                 summary_idx,
+                 source_ctx,
+                 pad_idx,
+                 position_embedding_base,
+                 ):
+        super().__init__()
+        self.m = m
+        self.begin_idx = begin_idx
+        self.delimeter_idx = delimeter_idx
+        self.summary_idx = summary_idx
+        self.source_ctx = source_ctx
+        self.pad_idx = pad_idx
+        self.source_pos = np.arange(source_ctx+1).reshape(-1, source_ctx+1) + position_embedding_base
+        self.target_pos = np.arange(source_ctx-1).reshape(-1, source_ctx-1) + position_embedding_base + source_ctx + 1
+
+    def _preprocess(self, x):
+        def to(x):
+            return to_cuda(torch.LongTensor(x))
+        x = x['x']
+        batch_size = len(x)
+        init_state_x = to(PaddedList([[self.begin_idx] + t + [self.summary_idx] for t in x],
+                                     fill_value=self.pad_idx,
+                                     shape=(batch_size, self.source_ctx+1)))
+        init_state_x = torch.cat((
+            init_state_x.unsqueeze(-1),
+            to(np.repeat(self.source_pos, batch_size, axis=0)).unsqueeze(-1)
+        ), dim=-1)
+        x = to(PaddedList([[self.begin_idx] + t for t in x], fill_value=self.pad_idx, shape=(batch_size, self.source_ctx)))
+        x = torch.cat((x, to_cuda(torch.ones(batch_size, 1).long())*self.delimeter_idx), dim=1)
+        x = torch.cat((
+            x.unsqueeze(-1),
+            to(np.repeat(self.source_pos, batch_size, axis=0)).unsqueeze(-1)
+        ), dim=-1)
+        y_position = to(np.repeat(self.target_pos, batch_size, axis=0))
+        return init_state_x, x, y_position
 
     def forward(self, x):
         return self.m(*self._preprocess(x))

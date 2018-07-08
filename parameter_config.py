@@ -879,3 +879,82 @@ def sequence_transform_data_config2(is_debug, output_log=None):
         "epoch_ratio": 1,
         "scheduler_fn": None
     }
+
+
+
+def sequence_transform_data_config3(is_debug, output_log=None):
+    from model.encoder_decoder_graph import SEDWithInitialStatePreproceser
+    import numpy as np
+    from read_data.sequencec_transform_data.load_data import load_generated_random_target_data
+    train, valid, test = load_generated_random_target_data(is_debug)
+    valid.train = False
+    test.train = False
+    max_index = 10
+    def new_id():
+        nonlocal max_index
+        max_index += 1
+        return max_index
+    max_length = 20
+    begin_index = new_id()
+    end_index = new_id()
+    delimiter_index = new_id()
+    pad_index = new_id()
+    decoder_init_idx = new_id()
+    for t in [train, valid, test]:
+        t.end = [end_index]
+    train_size = len(train)
+    itr_num = 80
+    batch_size = 14
+    from model.transformer_lm import dotdict
+    from model.encoder_decoder_graph import SEDWithInitialState
+    return {
+        "model_fn": SEDWithInitialState,
+        "model_dict": {
+            "cfg": dotdict({
+                'n_embd': 768,
+                'n_head': 12,
+                'n_layer': 12,
+                'embd_pdrop': 0.1,
+                'attn_pdrop': 0.1,
+                'resid_pdrop': 0.1,
+                'afn': 'gelu',
+                'clf_pdrop': 0.1}),
+            "vocab": max_index + 1 + max_length * 2 + 4,
+            "n_source_ctx": max_length + 2,
+            "n_ctx": max_length * 2 + 4,
+            "decoder_init_idx": decoder_init_idx,
+        },
+        "pre_process_module_fn": SEDWithInitialStatePreproceser,
+        "pre_process_module_dict": {
+            "begin_idx":  begin_index,
+            "delimeter_idx": delimiter_index,
+            "summary_idx": decoder_init_idx,
+            "pad_idx": pad_index,
+            "source_ctx": max_length+2,
+            "position_embedding_base": max_index+1,
+        },
+        "data": [train, valid, test],
+        "label_preprocess": lambda x: to_cuda(torch.LongTensor([PaddedList(t, fill_value=pad_index, shape=[max_length+1]) for t in x['y']])),
+        "batch_size": batch_size,
+        "train_loss": lambda: NCE_train_loss(ignore_index=pad_index),
+        "clip_norm": 1,
+        "name": "SEDWithInitialState",
+        "optimizer": OpenAIAdam,
+        "need_pad": True,
+        "optimizer_dict": {
+                           "schedule": 'warmup_linear',
+                           "warmup": 0.002,
+                           "t_total": (train_size//batch_size)*itr_num,
+                           "b1": 0.9,
+                           "b2": 0.999,
+                           "e": 1e-8,
+                           "l2": 0.01,
+                           "vector_l2": 'store_true',
+                           "max_grad_norm": 1},
+        "epcohes": itr_num,
+        "lr": 6.25e-5,
+        "evaluate_object_list": [SequenceExactMatch(gpu_index=get_gpu_index(), ignore_token=pad_index),
+                                 SequenceOutputIDToWord(vocab=None, file_path=output_log, ignore_token=pad_index)],
+        "epoch_ratio": 1,
+        "scheduler_fn": None
+    }
